@@ -39,7 +39,7 @@ class SprintController extends AbstractController
     public function show(Request $request, Project $project, SprintService $sprints): Response
     {
         $available = $sprints->getSelectableSprints($project);
-        $sprintId = $request->query->getInt('sprint');
+        $sprintId = (int) $request->query->get('sprint');
         $sprint = null;
         foreach ($available as $candidate) {
             if ($sprintId ? $candidate->id === $sprintId : $candidate->isActive()) {

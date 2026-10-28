@@ -43,7 +43,7 @@ class DeveloperController extends AbstractCrudController
     public function new(Request $request, TeamRepository $teams): Response
     {
         $developer = new Developer();
-        if ($teamId = $request->query->getInt('team')) {
+        if ($teamId = (int) $request->query->get('team')) {
             $developer->setTeam($teams->find($teamId));
         }
 
@@ -92,7 +92,7 @@ class DeveloperController extends AbstractCrudController
         }
 
         if ($request->isMethod('POST') && $this->isCsrfTokenValid('import', (string) $request->request->get('_token'))) {
-            $team = $teams->find($request->request->getInt('team'));
+            $team = $teams->find((int) $request->request->get('team'));
             $selected = (array) $request->request->all('users');
             $count = 0;
             foreach ($users as $user) {

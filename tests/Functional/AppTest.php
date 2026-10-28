@@ -79,7 +79,7 @@ class AppTest extends WebTestCase
         self::assertStringContainsString('level-critical', $html, 'Ticket depuis 10 jours en "En cours" => alerte rouge');
         self::assertSelectorTextContains('.member-card.idle', 'Bob Petit');
 
-        foreach (['/sprints', '/sprints/1', '/backlog/1', '/suivi', '/projets/1', '/release-note?project=1&version=2.0', '/parametrage/connexion', '/parametrage/membres/import?project=APP'] as $url) {
+        foreach (['/sprints', '/sprints/1', '/backlog/1', '/suivi', '/projets/1', '/release-note?project=1&version=2.0&sprint=', '/?team=', '/suivi?project=', '/parametrage/connexion', '/parametrage/membres/import?project=APP'] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful($url);
         }

@@ -22,7 +22,7 @@ class DashboardController extends AbstractController
             return $this->render('dashboard/welcome.html.twig');
         }
 
-        $teamId = $request->query->getInt('team');
+        $teamId = (int) $request->query->get('team');
         $teams = $teamId ? array_values(array_filter($allTeams, fn ($t) => $t->getId() === $teamId)) : $allTeams;
 
         $board = $activity->getTeamsActivity($teams);

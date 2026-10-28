@@ -41,7 +41,7 @@ class ConfluencePageController extends AbstractCrudController
     public function new(Request $request, ProjectRepository $projects): Response
     {
         $page = new ConfluencePage();
-        if ($projectId = $request->query->getInt('project')) {
+        if ($projectId = (int) $request->query->get('project')) {
             $page->setProject($projects->find($projectId));
         }
 

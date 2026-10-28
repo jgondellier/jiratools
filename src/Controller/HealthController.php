@@ -19,7 +19,7 @@ class HealthController extends AbstractController
     public function index(Request $request, ProjectRepository $projectRepository, ConfluencePageRepository $pageRepository, HealthService $health): Response
     {
         $allProjects = $projectRepository->findBy(['active' => true], ['name' => 'ASC']);
-        $projectId = $request->query->getInt('project');
+        $projectId = (int) $request->query->get('project');
         $projects = $projectId ? array_values(array_filter($allProjects, fn ($p) => $p->getId() === $projectId)) : $allProjects;
 
         $pages = array_filter(

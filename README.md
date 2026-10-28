@@ -1,6 +1,6 @@
 # Jira Tools — pilotage d'équipes Jira / Confluence
 
-Application Symfony 6.4 (LTS) / PHP 8.1+ pour suivre vos équipes et vos projets Jira / Confluence au quotidien.
+Application Symfony 7.4 (LTS) / PHP 8.2+ pour suivre vos équipes et vos projets Jira / Confluence au quotidien.
 
 | Écran | Ce qu'il montre |
 |---|---|
@@ -14,7 +14,7 @@ Application Symfony 6.4 (LTS) / PHP 8.1+ pour suivre vos équipes et vos projets
 
 ## Installation sous EasyPHP (Windows)
 
-Prérequis : EasyPHP Devserver avec **PHP 8.1 ou plus** et MySQL/MariaDB, [Composer](https://getcomposer.org/download/).
+Prérequis : EasyPHP Devserver avec **PHP 8.2 ou plus** et MySQL/MariaDB, [Composer](https://getcomposer.org/download/).
 Extensions PHP à activer dans le `php.ini` si ce n'est pas déjà le cas : `pdo_mysql` (ou `pdo_sqlite`), `curl`, `mbstring`, `openssl`, `ctype`, `iconv`.
 
 1. Récupérez le projet dans un dossier, par exemple `C:\EasyPHP\eds-www\jiratools`, puis installez les dépendances :

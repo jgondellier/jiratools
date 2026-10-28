@@ -28,7 +28,7 @@ class ReleaseNoteController extends AbstractController
         ReleaseNoteService $releaseNotes,
     ): Response {
         $allProjects = $projects->findBy(['active' => true], ['name' => 'ASC']);
-        $project = $projects->find($request->query->getInt('project')) ?? ($allProjects[0] ?? null);
+        $project = $projects->find((int) $request->query->get('project')) ?? ($allProjects[0] ?? null);
         if (!$project) {
             $this->addFlash('warning', 'Paramétrez d\'abord un projet.');
 
@@ -40,7 +40,7 @@ class ReleaseNoteController extends AbstractController
         $sprintList = $sprints->getSelectableSprints($project);
 
         $version = $request->query->get('version') ?: null;
-        $sprintId = $request->query->getInt('sprint') ?: null;
+        $sprintId = (int) $request->query->get('sprint') ?: null;
         $onlyDone = !$request->query->has('version') && !$request->query->has('sprint') ? true : $request->query->getBoolean('onlyDone');
         $result = null;
         $title = null;
@@ -73,12 +73,12 @@ class ReleaseNoteController extends AbstractController
         ConfluenceClient $confluence,
         EntityManagerInterface $em,
     ): Response {
-        $project = $projects->find($request->request->getInt('project'));
+        $project = $projects->find((int) $request->request->get('project'));
         if (!$project || !$this->isCsrfTokenValid('publish', (string) $request->request->get('_token'))) {
             throw $this->createNotFoundException();
         }
         $version = $request->request->get('version') ?: null;
-        $sprintId = $request->request->getInt('sprint') ?: null;
+        $sprintId = (int) $request->request->get('sprint') ?: null;
         $onlyDone = $request->request->getBoolean('onlyDone');
         $back = $this->redirectToRoute('release_note', array_filter([
             'project' => $project->getId(), 'version' => $version, 'sprint' => $sprintId, 'onlyDone' => (int) $onlyDone,
