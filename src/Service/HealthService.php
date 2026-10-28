@@ -10,7 +10,7 @@ use App\Entity\Project;
 use App\Jira\JiraClient;
 
 /**
- * Indicateurs de suivi et d'hygiène : tickets qui traînent, bloqués, sans étiquette, etc.
+ * Indicateurs de suivi et d'hygiène : tickets qui traînent, bloqués, non estimés, etc.
  */
 class HealthService
 {
@@ -79,11 +79,6 @@ class HealthService
                 'Tickets signalés / bloqués',
                 'Tickets marqués avec le drapeau "Flagged" (obstacle) et non terminés.',
                 "$scope AND flagged is not EMPTY AND statusCategory != Done ORDER BY priority DESC",
-            ],
-            'done_no_label' => [
-                'Terminés sans étiquette (absents de la release note)',
-                'Tickets terminés ces 30 derniers jours sans étiquette : ils tomberont dans "Autres évolutions".',
-                "$scope AND statusCategory = Done AND resolved >= -30d AND labels is EMPTY AND issuetype not in subTaskIssueTypes() ORDER BY resolved DESC",
             ],
             'sprint_no_estimate' => [
                 'Sprint en cours : tickets non estimés',

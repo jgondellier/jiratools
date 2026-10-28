@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Repository\TeamRepository;
 use App\Service\ActivityService;
+use App\Service\DevelopmentStatuses;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,7 +16,7 @@ class DashboardController extends AbstractController
      * "Qui fait quoi" : ticket en cours de chaque membre, à l'instant.
      */
     #[Route('/', name: 'dashboard', methods: ['GET'])]
-    public function index(Request $request, TeamRepository $teamRepository, ActivityService $activity): Response
+    public function index(Request $request, TeamRepository $teamRepository, ActivityService $activity, DevelopmentStatuses $developmentStatuses): Response
     {
         $allTeams = $teamRepository->findBy([], ['name' => 'ASC']);
         if ([] === $allTeams) {
@@ -32,7 +33,7 @@ class DashboardController extends AbstractController
                 ++$stats['members'];
                 $stats['idle'] += (int) $member->isIdleAlert();
                 $stats['overWip'] += (int) $member->isOverWip();
-                foreach ($member->inProgress as $view) {
+                foreach (array_merge($member->development, $member->otherWork) as $view) {
                     if (isset($stats[$view->age->level])) {
                         ++$stats[$view->age->level];
                     }
@@ -47,6 +48,7 @@ class DashboardController extends AbstractController
             'stats' => $stats,
             'unassigned' => $activity->getUnassignedInProgress(),
             'generated_at' => new \DateTimeImmutable(),
+            'development_statuses' => $developmentStatuses->getStatuses(),
         ]);
     }
 }

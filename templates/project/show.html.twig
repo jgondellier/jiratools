@@ -13,7 +13,6 @@
             <a href="{{ jira_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right"></i> Tickets Jira</a>
             {% if board_url %}<a href="{{ board_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right"></i> Board</a>{% endif %}
             <a href="{{ path('backlog_show', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary">Backlog</a>
-            <a href="{{ path('release_note', {project: project.id}) }}" class="btn btn-sm btn-outline-secondary">Release note</a>
             <a href="{{ path('admin_project_edit', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
         </div>
     </div>
@@ -29,7 +28,6 @@
                     <li class="list-group-item"><strong>Équipes :</strong>
                         {% for team in project.teams %}<span class="badge" style="background: {{ team.color }}">{{ team.name }}</span> {% else %}aucune{% endfor %}
                     </li>
-                    <li class="list-group-item"><strong>Espace Confluence :</strong> {{ project.confluenceSpaceKey ?? '—' }}</li>
                     <li class="list-group-item"><strong>JQL :</strong> <code>{{ scope }}</code></li>
                 </ul>
             </div>

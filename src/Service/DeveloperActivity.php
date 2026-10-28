@@ -7,22 +7,25 @@ use App\Entity\Developer;
 final class DeveloperActivity
 {
     /**
-     * @param IssueView[] $inProgress
+     * @param IssueView[] $development tickets dans un statut "en développement"
+     * @param IssueView[] $otherWork   autres tickets en cours (revue, test…)
      */
     public function __construct(
         public readonly Developer $developer,
-        public readonly array $inProgress,
+        public readonly array $development,
+        public readonly array $otherWork,
         public readonly int $wipLimit,
         public ?IssueView $lastActivity = null,
     ) {
     }
 
+    /** Aucun ticket en cours de développement */
     public function isIdle(): bool
     {
-        return [] === $this->inProgress;
+        return [] === $this->development;
     }
 
-    /** Membre sans ticket alors qu'il devrait en avoir un */
+    /** Membre sans ticket en développement alors qu'il devrait en avoir un */
     public function isIdleAlert(): bool
     {
         return $this->isIdle() && $this->developer->isExpectedOnTicket();
@@ -30,13 +33,13 @@ final class DeveloperActivity
 
     public function isOverWip(): bool
     {
-        return \count($this->inProgress) > $this->wipLimit;
+        return \count($this->development) > $this->wipLimit;
     }
 
     public function getWorstLevel(): string
     {
         $worst = StatusAge::OK;
-        foreach ($this->inProgress as $view) {
+        foreach (array_merge($this->development, $this->otherWork) as $view) {
             if (StatusAge::severity($view->age->level) > StatusAge::severity($worst)) {
                 $worst = $view->age->level;
             }

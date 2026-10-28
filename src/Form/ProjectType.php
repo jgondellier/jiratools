@@ -48,16 +48,6 @@ class ProjectType extends AbstractType
                 'help' => 'Optionnel, ex. : issuetype != Epic',
                 'required' => false,
             ])
-            ->add('confluenceSpaceKey', TextType::class, [
-                'label' => 'Espace Confluence',
-                'help' => 'Clé de l\'espace où publier la release note (ex. : APP).',
-                'required' => false,
-            ])
-            ->add('releaseNoteParentPageId', TextType::class, [
-                'label' => 'Page parente des release notes (id)',
-                'help' => 'Identifiant de la page Confluence sous laquelle créer les release notes.',
-                'required' => false,
-            ])
             ->add('active', CheckboxType::class, ['label' => 'Projet actif', 'required' => false]);
     }
 

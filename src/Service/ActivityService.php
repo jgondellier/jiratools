@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Atlassian\AtlassianException;
 use App\Entity\Developer;
 use App\Entity\Team;
 use App\Jira\Issue;
@@ -9,7 +10,7 @@ use App\Jira\JiraClient;
 use App\Repository\ProjectRepository;
 
 /**
- * "Qui fait quoi" : ticket(s) en cours de chaque membre, membres sans ticket.
+ * "Qui fait quoi" : ticket(s) en cours de développement de chaque membre, membres sans ticket.
  */
 class ActivityService
 {
@@ -17,6 +18,7 @@ class ActivityService
         private readonly JiraClient $jira,
         private readonly IssueViewFactory $views,
         private readonly ProjectRepository $projectRepository,
+        private readonly DevelopmentStatuses $developmentStatuses,
     ) {
     }
 
@@ -37,13 +39,7 @@ class ActivityService
 
         $byAssignee = [];
         if ([] !== $developers) {
-            $ids = JiraClient::quoteList(array_map('strval', array_keys($developers)));
-            $issues = $this->jira->search(
-                sprintf('assignee in (%s) AND statusCategory = "In Progress" ORDER BY updated DESC', $ids),
-                300,
-                true,
-            );
-            foreach ($issues as $issue) {
+            foreach ($this->searchCurrentWork(array_map('strval', array_keys($developers))) as $issue) {
                 $byAssignee[$issue->assigneeId][] = $this->views->create($issue);
             }
         }
@@ -55,7 +51,9 @@ class ActivityService
             foreach ($team->getActiveDevelopers() as $dev) {
                 $views = $byAssignee[$dev->getJiraAccountId()] ?? [];
                 usort($views, fn (IssueView $a, IssueView $b) => $b->age->days <=> $a->age->days);
-                $activity = new DeveloperActivity($dev, $views, $team->getWipLimit());
+                $development = array_values(array_filter($views, fn (IssueView $v) => $this->developmentStatuses->isDevelopment($v->issue)));
+                $other = array_values(array_filter($views, fn (IssueView $v) => !$this->developmentStatuses->isDevelopment($v->issue)));
+                $activity = new DeveloperActivity($dev, $development, $other, $team->getWipLimit());
                 if ($activity->isIdle()) {
                     $idle[$dev->getJiraAccountId()][] = $activity;
                 }
@@ -69,6 +67,37 @@ class ActivityService
         $this->attachLastActivity($idle);
 
         return $result;
+    }
+
+    /**
+     * Tickets en cours (catégorie "En cours" + statuts de développement paramétrés) des membres.
+     *
+     * @param string[] $accountIds
+     *
+     * @return Issue[]
+     */
+    private function searchCurrentWork(array $accountIds): array
+    {
+        $assignees = sprintf('assignee in (%s)', JiraClient::quoteList($accountIds));
+        $inProgress = 'statusCategory = "In Progress"';
+        $statuses = $this->developmentStatuses->getStatuses();
+
+        if ([] !== $statuses) {
+            try {
+                return $this->jira->search(
+                    sprintf('%s AND (%s OR status in (%s)) ORDER BY updated DESC', $assignees, $inProgress, JiraClient::quoteList($statuses)),
+                    300,
+                    true,
+                );
+            } catch (AtlassianException $e) {
+                if (400 !== $e->getCode()) {
+                    throw $e;
+                }
+                // Un statut paramétré n'existe plus dans Jira (renommé ?) : on se limite à la catégorie "En cours"
+            }
+        }
+
+        return $this->jira->search(sprintf('%s AND %s ORDER BY updated DESC', $assignees, $inProgress), 300, true);
     }
 
     /**

@@ -18,13 +18,17 @@ class FakeJiraHttpClient extends MockHttpClient
 
             $data = match (true) {
                 str_ends_with($path, '/rest/api/2/search/jql') => ['issues' => $this->issues($query['jql'] ?? ''), 'isLast' => true],
+                (bool) preg_match('#/project/\w+/statuses$#', $path) => [['name' => 'Story', 'statuses' => [
+                    ['name' => 'En cours', 'statusCategory' => ['key' => 'indeterminate', 'name' => 'En cours']],
+                    ['name' => 'Code Review', 'statusCategory' => ['key' => 'indeterminate', 'name' => 'En cours']],
+                    ['name' => 'Terminé', 'statusCategory' => ['key' => 'done', 'name' => 'Terminé']],
+                ]]],
                 str_ends_with($path, '/rest/api/2/myself'), str_ends_with($path, '/rest/api/user/current') => ['displayName' => 'Testeur'],
                 (bool) preg_match('#/board/\d+/sprint$#', $path) => ['isLast' => true, 'values' => 'active' === ($query['state'] ?? '') ? [[
                     'id' => 5, 'name' => 'Sprint 5', 'state' => 'active', 'originBoardId' => 42,
                     'startDate' => (new \DateTimeImmutable('-5 days'))->format(DATE_ATOM),
                     'endDate' => (new \DateTimeImmutable('+9 days'))->format(DATE_ATOM),
                 ]] : []],
-                str_ends_with($path, '/versions') => [['id' => 1, 'name' => '2.0', 'released' => false]],
                 default => null,
             };
 

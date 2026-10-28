@@ -20,3 +20,5 @@ body { background: #f4f6f9; }
 .velocity-bar .bar { flex: 1; background: #0d6efd; border-radius: .25rem .25rem 0 0; position: relative; min-height: 2px; }
 .velocity-bar .bar span { position: absolute; top: -1.3rem; left: 0; right: 0; text-align: center; font-size: .75rem; }
 pre.markdown { max-height: 400px; overflow: auto; background: #f8f9fa; padding: 1rem; border-radius: .375rem; }
+.other-work { border-top: 1px dashed #dee2e6; padding-top: .5rem; opacity: .85; }
+.other-work .issue-line { padding-top: .2rem; padding-bottom: .2rem; font-size: .9rem; }

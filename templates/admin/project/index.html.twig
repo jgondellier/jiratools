@@ -15,7 +15,7 @@
                     <td class="small">{{ project.components|join(', ') ?: 'tous' }}</td>
                     <td>{{ project.jiraBoardId ?? '—' }}</td>
                     <td class="small">{{ project.teams|map(t => t.name)|join(', ') ?: '—' }}</td>
-                    <td class="small">{{ project.confluenceSpaceKey ?? '—' }} · {{ project.confluencePages|length }} page(s)
+                    <td class="small">{{ project.confluencePages|length }} page(s)
                         <a href="{{ path('admin_page_new', {project: project.id}) }}" title="Rattacher une page"><i class="bi bi-plus-circle"></i></a></td>
                     <td class="text-end"><a href="{{ path('admin_project_edit', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
                 </tr>

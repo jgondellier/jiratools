@@ -155,18 +155,40 @@ class JiraClient
         return $sprints;
     }
 
-    /** @return array<int, array{id: string, name: string, released: bool, archived: bool, releaseDate: ?string}> */
-    public function getVersions(string $projectKey): array
+    /**
+     * Statuts utilisés par les projets Jira donnés (tous les statuts de l'instance si aucun projet).
+     *
+     * @param string[] $projectKeys
+     *
+     * @return array<string, array{name: string, category: string, categoryName: string}> indexé par nom en minuscules
+     */
+    public function getStatuses(array $projectKeys = []): array
     {
-        $data = $this->jiraHttp->get(sprintf('rest/api/2/project/%s/versions', rawurlencode($projectKey)), [], 600);
+        $raw = [];
+        if ([] === $projectKeys) {
+            $raw = $this->jiraHttp->get('rest/api/2/status', [], 3600);
+        }
+        foreach ($projectKeys as $key) {
+            foreach ($this->jiraHttp->get(sprintf('rest/api/2/project/%s/statuses', rawurlencode($key)), [], 3600) as $issueType) {
+                $raw = array_merge($raw, $issueType['statuses'] ?? []);
+            }
+        }
 
-        return array_map(fn (array $v) => [
-            'id' => (string) $v['id'],
-            'name' => (string) $v['name'],
-            'released' => (bool) ($v['released'] ?? false),
-            'archived' => (bool) ($v['archived'] ?? false),
-            'releaseDate' => $v['releaseDate'] ?? null,
-        ], $data);
+        $statuses = [];
+        foreach ($raw as $status) {
+            $name = (string) ($status['name'] ?? '');
+            if ('' === $name) {
+                continue;
+            }
+            $statuses[mb_strtolower($name)] ??= [
+                'name' => $name,
+                'category' => (string) ($status['statusCategory']['key'] ?? Issue::CATEGORY_TODO),
+                'categoryName' => (string) ($status['statusCategory']['name'] ?? ''),
+            ];
+        }
+        uasort($statuses, fn ($a, $b) => strnatcasecmp($a['name'], $b['name']));
+
+        return $statuses;
     }
 
     /** @return string[] */

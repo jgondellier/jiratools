@@ -8,7 +8,7 @@
     </div>
     <div class="col-6 col-md">
         <div class="card stat-card h-100 {{ stats.idle ? 'border-danger text-danger' }}"><div class="card-body py-2">
-            <div class="small"><i class="bi bi-person-x"></i> Sans ticket en cours</div><div class="display-6">{{ stats.idle }}</div>
+            <div class="small"><i class="bi bi-person-x"></i> Sans ticket en développement</div><div class="display-6">{{ stats.idle }}</div>
         </div></div>
     </div>
     <div class="col-6 col-md">
@@ -50,20 +50,29 @@
                                 </div>
                                 <div class="ms-auto text-end">
                                     {% if member.idleAlert %}
-                                        <span class="badge text-bg-danger"><i class="bi bi-person-x"></i> Aucun ticket</span>
+                                        <span class="badge text-bg-danger"><i class="bi bi-person-x"></i> Aucun ticket en dev</span>
                                     {% elseif member.idle %}
-                                        <span class="badge text-bg-secondary">Aucun ticket</span>
+                                        <span class="badge text-bg-secondary">Aucun ticket en dev</span>
                                     {% elseif member.overWip %}
-                                        <span class="badge text-bg-warning" title="Limite WIP : {{ member.wipLimit }}"><i class="bi bi-stack"></i> {{ member.inProgress|length }} en cours</span>
+                                        <span class="badge text-bg-warning" title="Limite WIP : {{ member.wipLimit }}"><i class="bi bi-stack"></i> {{ member.development|length }} en dev</span>
                                     {% else %}
-                                        <span class="badge text-bg-success">{{ member.inProgress|length }} en cours</span>
+                                        <span class="badge text-bg-success"><i class="bi bi-code-slash"></i> {{ member.development|length }} en dev</span>
                                     {% endif %}
                                 </div>
                             </div>
 
-                            {% for view in member.inProgress %}
+                            {% for view in member.development %}
                                 {{ ui.issue_line(view) }}
-                            {% else %}
+                            {% endfor %}
+
+                            {% if member.otherWork is not empty %}
+                                <div class="other-work mt-2">
+                                    <div class="small text-muted mb-1"><i class="bi bi-arrow-repeat"></i> Autres tickets en cours (hors développement)</div>
+                                    {% for view in member.otherWork %}
+                                        {{ ui.issue_line(view) }}
+                                    {% endfor %}
+                                </div>
+                            {% elseif member.idle %}
                                 <div class="text-muted small">
                                     {% if member.lastActivity %}
                                         Dernier ticket touché :
@@ -74,7 +83,7 @@
                                         Aucune activité Jira depuis 15 jours.
                                     {% endif %}
                                 </div>
-                            {% endfor %}
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -93,6 +102,12 @@
 {% endif %}
 
 <p class="text-muted small refresh-indicator">
+    {% if development_statuses is empty %}
+        « En développement » = statuts de la catégorie Jira <em>En cours</em>
+    {% else %}
+        « En développement » = {{ development_statuses|join(', ') }}
+    {% endif %}
+    (<a href="{{ path('admin_dev_statuses') }}">paramétrer</a>) ·
     Données Jira du {{ generated_at|date('d/m/Y à H:i:s') }}
     {% if refresh_seconds > 0 %} · actualisation automatique dans <span data-refresh-counter>{{ refresh_seconds }} s</span>{% endif %}
 </p>

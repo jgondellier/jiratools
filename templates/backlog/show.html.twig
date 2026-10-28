@@ -105,7 +105,7 @@
                                 <td>{{ issue.summary }}{% if issue.parentKey %} <span class="text-muted small">← {{ issue.parentSummary ?? issue.parentKey }}</span>{% endif %}</td>
                                 <td class="text-nowrap">{{ ui.status_badge(issue) }} {% if view.age.alert %}{{ ui.age_badge(view.age) }}{% endif %}</td>
                                 <td class="small">{{ issue.components|join(', ') }}</td>
-                                <td>{% for l in issue.labels %}<span class="badge text-bg-light border">{{ l }}</span> {% else %}<span class="text-warning-emphasis small" title="Pas d'étiquette : ira dans 'Autres évolutions' de la release note"><i class="bi bi-tag"></i> ?</span>{% endfor %}</td>
+                                <td>{% for l in issue.labels %}<span class="badge text-bg-light border">{{ l }}</span> {% else %}<span class="text-warning-emphasis small" title="Pas d'étiquette"><i class="bi bi-tag"></i> ?</span>{% endfor %}</td>
                                 <td class="text-end">{% if issue.storyPoints is not null %}{{ issue.storyPoints }}{% else %}<span class="text-muted">–</span>{% endif %}</td>
                                 <td class="small text-nowrap">{{ issue.assigneeName ?? '' }}</td>
                             </tr>

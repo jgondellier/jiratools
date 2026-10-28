@@ -79,7 +79,26 @@ class AppTest extends WebTestCase
         self::assertStringContainsString('level-critical', $html, 'Ticket depuis 10 jours en "En cours" => alerte rouge');
         self::assertSelectorTextContains('.member-card.idle', 'Bob Petit');
 
-        foreach (['/sprints', '/sprints/1', '/backlog/1', '/suivi', '/projets/1', '/release-note?project=1&version=2.0&sprint=', '/?team=', '/suivi?project=', '/parametrage/connexion', '/parametrage/membres/import?project=APP'] as $url) {
+        // Seul "En cours" compte comme du développement : le ticket en Code Review d'Alice passe en "autres tickets"
+        $crawler = $this->client->request('GET', '/parametrage/statuts-developpement');
+        self::assertSelectorExists('input[value="Code Review"]');
+        $form = $crawler->selectButton('Enregistrer')->form();
+        foreach ($form['statuses'] as $checkbox) {
+            if ('En cours' === $checkbox->availableOptionValues()[0]) {
+                $checkbox->tick();
+            }
+        }
+        $this->client->submit($form);
+        self::assertResponseRedirects('/parametrage/statuts-developpement');
+
+        $crawler = $this->client->request('GET', '/');
+        $alice = $crawler->filter('.member-card')->reduce(fn ($card) => str_contains($card->text(), 'Alice Martin'));
+        self::assertCount(1, $alice);
+        self::assertStringContainsString('idle', $alice->attr('class'), 'Alice n\'a aucun ticket en développement');
+        self::assertStringContainsString('APP-1', $alice->filter('.other-work')->text());
+        self::assertSelectorTextContains('.refresh-indicator', 'En cours');
+
+        foreach (['/sprints', '/sprints/1', '/backlog/1', '/suivi', '/projets/1', '/sprints/1?sprint=', '/?team=', '/suivi?project=', '/parametrage/connexion', '/parametrage/membres/import?project=APP'] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful($url);
         }

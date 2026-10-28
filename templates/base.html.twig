@@ -23,7 +23,6 @@
                 <li class="nav-item"><a class="nav-link {{ route == 'dashboard' ? 'active' }}" href="{{ path('dashboard') }}"><i class="bi bi-people"></i> Qui fait quoi</a></li>
                 <li class="nav-item"><a class="nav-link {{ route starts with 'sprint' ? 'active' }}" href="{{ path('sprint_index') }}"><i class="bi bi-calendar-range"></i> Sprints</a></li>
                 <li class="nav-item"><a class="nav-link {{ route starts with 'backlog' ? 'active' }}" href="{{ path('backlog_index') }}"><i class="bi bi-list-task"></i> Backlog</a></li>
-                <li class="nav-item"><a class="nav-link {{ route starts with 'release' ? 'active' }}" href="{{ path('release_note') }}"><i class="bi bi-megaphone"></i> Release note</a></li>
                 <li class="nav-item"><a class="nav-link {{ route == 'health' ? 'active' }}" href="{{ path('health') }}"><i class="bi bi-heart-pulse"></i> Suivi &amp; alertes</a></li>
                 <li class="nav-item"><a class="nav-link {{ route starts with 'project_' ? 'active' }}" href="{{ path('project_index') }}"><i class="bi bi-kanban"></i> Projets</a></li>
             </ul>
@@ -35,6 +34,7 @@
                         <li><a class="dropdown-item" href="{{ path('admin_developer_index') }}"><i class="bi bi-person-badge"></i> Membres</a></li>
                         <li><a class="dropdown-item" href="{{ path('admin_project_index') }}"><i class="bi bi-kanban"></i> Projets</a></li>
                         <li><a class="dropdown-item" href="{{ path('admin_page_index') }}"><i class="bi bi-file-earmark-text"></i> Pages Confluence</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_dev_statuses') }}"><i class="bi bi-code-slash"></i> Statuts « en développement »</a></li>
                         <li><a class="dropdown-item" href="{{ path('admin_rule_index') }}"><i class="bi bi-hourglass-split"></i> Seuils par statut</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ path('admin_connection') }}"><i class="bi bi-plug"></i> Tester la connexion</a></li>

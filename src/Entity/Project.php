@@ -46,14 +46,6 @@ class Project
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $extraJql = null;
 
-    /** Espace Confluence par défaut (pour publier la release note) */
-    #[ORM\Column(length: 60, nullable: true)]
-    private ?string $confluenceSpaceKey = null;
-
-    /** Page parente Confluence sous laquelle publier les release notes */
-    #[ORM\Column(length: 30, nullable: true)]
-    private ?string $releaseNoteParentPageId = null;
-
     #[ORM\Column]
     private bool $active = true;
 
@@ -162,30 +154,6 @@ class Project
     public function setExtraJql(?string $extraJql): static
     {
         $this->extraJql = $extraJql;
-
-        return $this;
-    }
-
-    public function getConfluenceSpaceKey(): ?string
-    {
-        return $this->confluenceSpaceKey;
-    }
-
-    public function setConfluenceSpaceKey(?string $confluenceSpaceKey): static
-    {
-        $this->confluenceSpaceKey = $confluenceSpaceKey;
-
-        return $this;
-    }
-
-    public function getReleaseNoteParentPageId(): ?string
-    {
-        return $this->releaseNoteParentPageId;
-    }
-
-    public function setReleaseNoteParentPageId(?string $releaseNoteParentPageId): static
-    {
-        $this->releaseNoteParentPageId = $releaseNoteParentPageId;
 
         return $this;
     }

@@ -2,7 +2,6 @@
 
 namespace App\Confluence;
 
-use App\Atlassian\AtlassianException;
 use App\Atlassian\AtlassianHttp;
 use App\Jira\JiraClient;
 
@@ -33,54 +32,6 @@ class ConfluenceClient
             ['expand' => 'version,space,history.lastUpdated'],
             900,
         );
-
-        return $this->mapPage($data);
-    }
-
-    /**
-     * Recherche une page par titre dans un espace.
-     */
-    public function findPage(string $spaceKey, string $title): ?ConfluencePageInfo
-    {
-        $data = $this->confluenceHttp->get('rest/api/content', [
-            'spaceKey' => $spaceKey,
-            'title' => $title,
-            'type' => 'page',
-            'expand' => 'version,space',
-        ], 0);
-        $result = $data['results'][0] ?? null;
-
-        return $result ? $this->mapPage($result) : null;
-    }
-
-    /**
-     * Crée la page, ou la met à jour si une page du même titre existe déjà dans l'espace.
-     */
-    public function publishPage(string $spaceKey, ?string $parentId, string $title, string $storageBody): ConfluencePageInfo
-    {
-        $existing = $this->findPage($spaceKey, $title);
-
-        $payload = [
-            'type' => 'page',
-            'title' => $title,
-            'space' => ['key' => $spaceKey],
-            'body' => ['storage' => ['value' => $storageBody, 'representation' => 'storage']],
-        ];
-        if ($parentId) {
-            $payload['ancestors'] = [['id' => $parentId]];
-        }
-
-        if ($existing) {
-            $payload['id'] = $existing->id;
-            $payload['version'] = ['number' => $existing->version + 1, 'message' => 'Mise à jour automatique (Jira Tools)'];
-            $data = $this->confluenceHttp->request('PUT', 'rest/api/content/'.rawurlencode($existing->id), ['json' => $payload]);
-        } else {
-            $data = $this->confluenceHttp->request('POST', 'rest/api/content', ['json' => $payload]);
-        }
-
-        if (!isset($data['id'])) {
-            throw new AtlassianException('Réponse inattendue de Confluence lors de la publication.');
-        }
 
         return $this->mapPage($data);
     }
