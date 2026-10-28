@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}Importer des membres{% endblock %}
+
+{% block body %}
+    <h1 class="h3 mb-3"><i class="bi bi-cloud-download"></i> Importer des membres depuis Jira</h1>
+
+    <form method="get" class="d-flex gap-2 mb-3" style="max-width: 420px">
+        <input name="project" class="form-control" list="project-keys" value="{{ project_key }}" placeholder="Clé du projet Jira (ex. : APP)">
+        <datalist id="project-keys">{% for k in keys %}<option value="{{ k }}">{% endfor %}</datalist>
+        <button class="btn btn-outline-primary text-nowrap">Lister</button>
+    </form>
+
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+    {% if users is not empty %}
+        <form method="post">
+            <input type="hidden" name="_token" value="{{ csrf_token('import') }}">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>{{ users|length }} utilisateur(s) assignable(s) sur <code>{{ project_key }}</code></span>
+                    <label class="small"><input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('input[name=\'users[]\']').forEach(c => c.checked = this.checked)"> Tout cocher</label>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for user in users %}
+                        <li class="list-group-item">
+                            <label class="d-flex align-items-center gap-2 mb-0">
+                                <input type="checkbox" name="users[]" value="{{ user.id }}" class="form-check-input">
+                                {{ ui.avatar(user.name, user.avatar, 28) }}
+                                <span>{{ user.name }}</span>
+                                {% if user.email %}<span class="text-muted small">{{ user.email }}</span>{% endif %}
+                                {% if known[user.id] is defined %}<span class="badge text-bg-success ms-auto">déjà présent{{ known[user.id].team ? ' · ' ~ known[user.id].team.name : '' }}</span>{% endif %}
+                            </label>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <label class="form-label mb-0">Rattacher à l'équipe</label>
+                <select name="team" class="form-select" style="max-width: 260px">
+                    <option value="">— ne pas modifier —</option>
+                    {% for team in teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}
+                </select>
+                <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Importer la sélection</button>
+            </div>
+        </form>
+    {% elseif project_key and not error %}
+        <div class="alert alert-info">Aucun utilisateur trouvé pour ce projet.</div>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}Membres{% endblock %}
+
+{% block body %}
+    {{ include('admin/_header.html.twig', {icon: 'person-badge', title: 'Membres des équipes', actions: [
+        {url: path('admin_developer_import'), icon: 'cloud-download', label: 'Importer depuis Jira', class: 'btn-outline-primary'},
+        {url: path('admin_developer_new'), icon: 'plus-lg', label: 'Nouveau membre'},
+    ]}) }}
+    <div class="card">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Nom</th><th>Rôle</th><th>Équipe</th><th>Identifiant Jira</th><th>Suivi</th><th></th></tr></thead>
+            <tbody>
+            {% for dev in developers %}
+                <tr class="{{ not dev.active ? 'text-muted' }}">
+                    <td>{{ ui.avatar(dev.displayName, dev.avatarUrl, 28) }} {{ dev.displayName }}</td>
+                    <td class="small">{{ dev.roleLabel }}</td>
+                    <td>{% if dev.team %}<span class="badge" style="background: {{ dev.team.color }}">{{ dev.team.name }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    <td><code class="small">{{ dev.jiraAccountId }}</code></td>
+                    <td class="small">
+                        {% if dev.active %}<i class="bi bi-eye text-success" title="Suivi"></i>{% else %}<i class="bi bi-eye-slash" title="Non suivi"></i>{% endif %}
+                        {% if dev.expectedOnTicket %}<i class="bi bi-bell text-danger" title="Alerte si aucun ticket"></i>{% endif %}
+                    </td>
+                    <td class="text-end"><a href="{{ path('admin_developer_edit', {id: dev.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Aucun membre. Utilisez « Importer depuis Jira ».</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

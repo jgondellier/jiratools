@@ -1,0 +1,24 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Bienvenue{% endblock %}
+
+{% block body %}
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body p-4">
+                    <h1 class="h3"><i class="bi bi-compass"></i> Bienvenue dans Jira Tools</h1>
+                    <p class="text-muted">Quelques étapes pour démarrer :</p>
+                    <ol class="list-group list-group-numbered mb-3">
+                        <li class="list-group-item">Renseignez la connexion Jira / Confluence dans <code>.env.local</code>, puis <a href="{{ path('admin_connection') }}">testez-la</a>.</li>
+                        <li class="list-group-item"><a href="{{ path('admin_team_new') }}">Créez vos équipes</a>.</li>
+                        <li class="list-group-item"><a href="{{ path('admin_project_new') }}">Déclarez vos projets</a> : projet Jira, composants, board Scrum, espace Confluence.</li>
+                        <li class="list-group-item"><a href="{{ path('admin_developer_import') }}">Importez les membres depuis Jira</a> et rattachez-les à leur équipe.</li>
+                        <li class="list-group-item"><a href="{{ path('admin_page_new') }}">Rattachez les pages Confluence</a> à vos projets.</li>
+                        <li class="list-group-item"><a href="{{ path('admin_rule_new') }}">Définissez les seuils d'alerte</a> par statut (ex. : Code Review &gt; 1 jour).</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block body %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-0"><i class="bi bi-kanban"></i> {{ project.name }}</h1>
+            {% if project.description %}<p class="text-muted mb-0">{{ project.description }}</p>{% endif %}
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ jira_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right"></i> Tickets Jira</a>
+            {% if board_url %}<a href="{{ board_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right"></i> Board</a>{% endif %}
+            <a href="{{ path('backlog_show', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary">Backlog</a>
+            <a href="{{ path('release_note', {project: project.id}) }}" class="btn btn-sm btn-outline-secondary">Release note</a>
+            <a href="{{ path('admin_project_edit', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header">Paramétrage</div>
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item"><strong>Projet Jira :</strong> <code>{{ project.jiraProjectKey }}</code></li>
+                    <li class="list-group-item"><strong>Composants :</strong> {{ project.components|join(', ') ?: 'tous' }}</li>
+                    <li class="list-group-item"><strong>Board Scrum :</strong> {{ project.jiraBoardId ?? 'non renseigné' }}</li>
+                    <li class="list-group-item"><strong>Équipes :</strong>
+                        {% for team in project.teams %}<span class="badge" style="background: {{ team.color }}">{{ team.name }}</span> {% else %}aucune{% endfor %}
+                    </li>
+                    <li class="list-group-item"><strong>Espace Confluence :</strong> {{ project.confluenceSpaceKey ?? '—' }}</li>
+                    <li class="list-group-item"><strong>JQL :</strong> <code>{{ scope }}</code></li>
+                </ul>
+            </div>
+
+            {% for report in reports %}
+                <div class="mb-3">{{ include('sprint/_card.html.twig', {report: report}) }}</div>
+            {% else %}
+                <div class="alert alert-light border small">Aucun sprint actif.</div>
+            {% endfor %}
+            {% if next_sprint %}
+                <div class="alert alert-light border small"><strong>Sprint suivant :</strong> {{ next_sprint.name }} {% if next_sprint.startDate %}· {{ ui.sprint_dates(next_sprint) }}{% endif %}</div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-file-earmark-text"></i> Pages Confluence</span>
+                    <a href="{{ path('admin_page_new', {project: project.id}) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Rattacher une page</a>
+                </div>
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Catégorie</th><th>Page</th><th>Dernière modification</th><th></th></tr></thead>
+                    <tbody>
+                    {% for item in pages %}
+                        {% set page = item.page %}
+                        <tr class="{{ item.stale ? 'table-warning' }}">
+                            <td class="small">{{ page.categoryLabel }}</td>
+                            <td>
+                                {% set url = item.info ? item.info.url : page.url %}
+                                {% if url %}<a href="{{ url }}" target="_blank" rel="noopener">{{ item.info ? item.info.title : page.title }}</a>{% else %}{{ page.title }}{% endif %}
+                            </td>
+                            <td class="small">
+                                {% if item.info %}
+                                    {{ item.info.lastUpdated ? item.info.lastUpdated|date('d/m/Y') : '?' }}
+                                    {% if item.info.lastUpdatedBy %}par {{ item.info.lastUpdatedBy }}{% endif %}
+                                    (v{{ item.info.version }})
+                                    {% if item.stale %}<span class="badge text-bg-warning" title="Seuil : {{ page.maxAgeDays }} j"><i class="bi bi-hourglass-bottom"></i> {{ item.info.ageDays }} j</span>{% endif %}
+                                {% elseif item.error %}
+                                    <span class="text-danger" title="{{ item.error }}"><i class="bi bi-x-circle"></i> inaccessible</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end"><a href="{{ path('admin_page_edit', {id: page.id, redirect: path('project_show', {id: project.id})}) }}" class="btn btn-sm btn-link"><i class="bi bi-pencil"></i></a></td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4" class="text-muted text-center py-3">Aucune page rattachée.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><i class="bi bi-exclamation-triangle"></i> Tickets qui traînent <span class="badge text-bg-secondary">{{ stuck|length }}</span></div>
+                <div class="card-body">
+                    {% for view in stuck %}{{ ui.issue_line(view, {project: false, assignee: true}) }}{% else %}<p class="text-muted mb-0">Rien à signaler 👍</p>{% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

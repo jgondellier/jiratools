@@ -1,0 +1,17 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Jira / Confluence indisponible{% endblock %}
+
+{% block body %}
+    <div class="alert alert-danger">
+        <h4 class="alert-heading"><i class="bi bi-plug"></i> Impossible de récupérer les données</h4>
+        <p class="mb-2">{{ message }}</p>
+        <hr>
+        <p class="mb-0">
+            Vérifiez les paramètres <code>JIRA_*</code> / <code>CONFLUENCE_*</code> de votre fichier <code>.env.local</code>,
+            puis <a href="{{ path('admin_connection') }}" class="alert-link">testez la connexion</a>.
+            Si l'erreur porte sur une requête JQL, vérifiez la clé Jira, les composants et le filtre JQL du projet dans
+            <a href="{{ path('admin_project_index') }}" class="alert-link">le paramétrage</a>.
+        </p>
+    </div>
+{% endblock %}

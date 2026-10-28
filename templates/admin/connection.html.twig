@@ -1,0 +1,30 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connexion Jira / Confluence{% endblock %}
+
+{% block body %}
+    <h1 class="h3 mb-3"><i class="bi bi-plug"></i> Connexion Jira / Confluence</h1>
+    <div class="row g-3">
+        {% for name, check in checks %}
+            <div class="col-md-6">
+                <div class="card border-{{ check.ok ? 'success' : 'danger' }}">
+                    <div class="card-body">
+                        <h2 class="h5">{% if check.ok %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %} {{ name }}</h2>
+                        <p class="mb-0">{{ check.message }}</p>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="card mt-3">
+        <div class="card-body small">
+            <p class="mb-2">Les paramètres se règlent dans le fichier <code>.env.local</code> à la racine de l'application :</p>
+<pre class="mb-0">JIRA_BASE_URL=https://mon-site.atlassian.net
+JIRA_USER=prenom.nom@entreprise.fr        # vide pour Jira Server/DC (jeton PAT)
+JIRA_API_TOKEN=xxxxxxxx
+CONFLUENCE_BASE_URL=https://mon-site.atlassian.net/wiki
+CONFLUENCE_USER=prenom.nom@entreprise.fr
+CONFLUENCE_API_TOKEN=xxxxxxxx</pre>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Projets{% endblock %}
+
+{% block body %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-kanban"></i> Projets</h1>
+        <a href="{{ path('admin_project_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouveau projet</a>
+    </div>
+    <div class="row g-3">
+        {% for project in projects %}
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100 {{ not project.active ? 'opacity-50' }}">
+                    <div class="card-body">
+                        <h2 class="h5"><a href="{{ path('project_show', {id: project.id}) }}" class="text-decoration-none">{{ project.name }}</a></h2>
+                        {% if project.description %}<p class="small text-muted">{{ project.description }}</p>{% endif %}
+                        <div class="small">
+                            <div><i class="bi bi-diagram-3"></i> Jira <code>{{ project.jiraProjectKey }}</code>{% if project.components %} · {{ project.components|join(', ') }}{% endif %}</div>
+                            <div><i class="bi bi-people"></i> {{ project.teams|map(t => t.name)|join(', ') ?: 'Aucune équipe' }}</div>
+                            <div><i class="bi bi-file-earmark-text"></i> {{ project.confluencePages|length }} page(s) Confluence</div>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-primary" href="{{ path('project_show', {id: project.id}) }}">Fiche</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ path('backlog_show', {id: project.id}) }}">Backlog</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ path('sprint_show', {id: project.id}) }}">Sprint</a>
+                        <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ path('admin_project_edit', {id: project.id}) }}" title="Modifier"><i class="bi bi-pencil"></i></a>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="col"><div class="alert alert-info">Aucun projet. <a href="{{ path('admin_project_new') }}">Créer le premier projet</a></div></div>
+        {% endfor %}
+    </div>
+{% endblock %}

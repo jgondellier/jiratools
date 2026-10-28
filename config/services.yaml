@@ -1,0 +1,101 @@
+# Paramétrage des services. Les valeurs de connexion se règlent dans .env.local (voir README).
+parameters:
+    app.timezone: '%env(APP_TIMEZONE)%'
+    app.refresh_seconds: '%env(int:APP_REFRESH_SECONDS)%'
+    app.default_warning_days: '%env(float:STATUS_DEFAULT_WARNING_DAYS)%'
+    app.default_critical_days: '%env(float:STATUS_DEFAULT_CRITICAL_DAYS)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        bind:
+            int $refreshSeconds: '%app.refresh_seconds%'
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+            - '../src/Jira/Issue.php'
+            - '../src/Jira/Sprint.php'
+            - '../src/Confluence/ConfluencePageInfo.php'
+            - '../src/Service/{IssueView,StatusAge,SprintReport,DeveloperActivity}.php'
+
+    # --- Connexions Atlassian -------------------------------------------------
+    app.jira_http:
+        class: App\Atlassian\AtlassianHttp
+        arguments:
+            $label: 'Jira'
+            $baseUrl: '%env(JIRA_BASE_URL)%'
+            $user: '%env(JIRA_USER)%'
+            $token: '%env(JIRA_API_TOKEN)%'
+            $cacheTtl: '%env(int:APP_CACHE_TTL)%'
+            $verifySsl: '%env(bool:ATLASSIAN_VERIFY_SSL)%'
+
+    app.confluence_http:
+        class: App\Atlassian\AtlassianHttp
+        arguments:
+            $label: 'Confluence'
+            $baseUrl: '%env(CONFLUENCE_BASE_URL)%'
+            $user: '%env(CONFLUENCE_USER)%'
+            $token: '%env(CONFLUENCE_API_TOKEN)%'
+            $cacheTtl: '%env(int:APP_CACHE_TTL)%'
+            $verifySsl: '%env(bool:ATLASSIAN_VERIFY_SSL)%'
+
+    App\Atlassian\AtlassianHttp: '@app.jira_http'
+
+    App\Jira\JiraClient:
+        arguments:
+            $jiraHttp: '@app.jira_http'
+            $deployment: '%env(JIRA_DEPLOYMENT)%'
+            $storyPointsField: '%env(JIRA_STORY_POINTS_FIELD)%'
+            $sprintField: '%env(JIRA_SPRINT_FIELD)%'
+            $flaggedField: '%env(JIRA_FLAGGED_FIELD)%'
+
+    App\Confluence\ConfluenceClient:
+        arguments:
+            $confluenceHttp: '@app.confluence_http'
+
+    # --- Règles de suivi -------------------------------------------------------
+    App\Service\WorkingTime:
+        arguments:
+            $excludeWeekends: '%env(bool:APP_EXCLUDE_WEEKENDS)%'
+
+    App\Service\StatusAgeEvaluator:
+        arguments:
+            $defaultWarningDays: '%app.default_warning_days%'
+            $defaultCriticalDays: '%app.default_critical_days%'
+
+    App\Service\ReleaseNoteService:
+        arguments:
+            $ignoredLabels: '%env(RELEASE_NOTE_IGNORED_LABELS)%'
+
+    App\Service\HealthService:
+        arguments:
+            $doneStatuses: '%env(JIRA_DONE_STATUSES)%'
+
+when@test:
+    services:
+        _defaults:
+            autowire: true
+        App\Tests\Functional\FakeJiraHttpClient: ~
+        app.jira_http:
+            class: App\Atlassian\AtlassianHttp
+            arguments:
+                $httpClient: '@App\Tests\Functional\FakeJiraHttpClient'
+                $label: 'Jira'
+                $baseUrl: '%env(JIRA_BASE_URL)%'
+                $user: '%env(JIRA_USER)%'
+                $token: '%env(JIRA_API_TOKEN)%'
+                $cacheTtl: 0
+        app.confluence_http:
+            class: App\Atlassian\AtlassianHttp
+            arguments:
+                $httpClient: '@App\Tests\Functional\FakeJiraHttpClient'
+                $label: 'Confluence'
+                $baseUrl: '%env(CONFLUENCE_BASE_URL)%'
+                $user: '%env(CONFLUENCE_USER)%'
+                $token: '%env(CONFLUENCE_API_TOKEN)%'
+                $cacheTtl: 0

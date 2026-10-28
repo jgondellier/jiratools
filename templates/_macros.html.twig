@@ -1,0 +1,55 @@
+{# Éléments d'affichage réutilisables #}
+
+{% macro age_badge(age) %}
+    <span class="badge {{ age.badgeClass }}" title="{% if age.warningDays is not null %}Seuils : {{ age.warningDays }} j / {{ age.criticalDays }} j{% else %}Pas de seuil pour ce statut{% endif %}">
+        {%- if age.level == 'critical' %}<i class="bi bi-exclamation-octagon-fill"></i> {% elseif age.level == 'warning' %}<i class="bi bi-exclamation-triangle-fill"></i> {% else %}<i class="bi bi-clock"></i> {% endif -%}
+        {{ age.label }}
+    </span>
+{% endmacro %}
+
+{% macro status_badge(issue) %}
+    <span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>
+{% endmacro %}
+
+{% macro issue_line(view, options = {}) %}
+    {% set issue = view.issue %}
+    <div class="issue-line d-flex align-items-start gap-2 level-{{ view.age.level }}">
+        {% if issue.typeIcon %}<img src="{{ issue.typeIcon }}" alt="{{ issue.type }}" title="{{ issue.type }}" width="16" height="16" class="mt-1">{% endif %}
+        <div class="flex-grow-1 min-w-0">
+            <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
+            {% if issue.flagged %}<i class="bi bi-flag-fill text-danger" title="Signalé / bloqué"></i>{% endif %}
+            <span class="text-body">{{ issue.summary }}</span>
+            <div class="small mt-1 d-flex flex-wrap gap-1 align-items-center">
+                {{ _self.status_badge(issue) }}
+                {{ _self.age_badge(view.age) }}
+                {% if options.project ?? true and view.project %}<span class="badge text-bg-light border">{{ view.project.name }}</span>{% endif %}
+                {% if issue.storyPoints is not null %}<span class="badge rounded-pill text-bg-info" title="Story points">{{ issue.storyPoints }} pts</span>{% endif %}
+                {% for label in issue.labels %}<span class="badge text-bg-light border text-muted"><i class="bi bi-tag"></i> {{ label }}</span>{% endfor %}
+                {% if options.assignee ?? false %}<span class="text-muted"><i class="bi bi-person"></i> {{ issue.assigneeName ?? 'Non assigné' }}</span>{% endif %}
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+{% macro avatar(name, url, size = 40) %}
+    {% if url %}
+        <img src="{{ url }}" alt="" class="rounded-circle" width="{{ size }}" height="{{ size }}">
+    {% else %}
+        {% set parts = name|split(' ') %}
+        <span class="avatar-initials rounded-circle" style="width:{{ size }}px;height:{{ size }}px">{{ (parts|first|first ~ (parts|length > 1 ? parts[1]|first : ''))|upper }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro progress(time, work, health) %}
+    <div class="small text-muted d-flex justify-content-between"><span>Temps écoulé</span><span>{{ time ?? '?' }} %</span></div>
+    <div class="progress mb-1" style="height: 6px"><div class="progress-bar bg-secondary" style="width: {{ time ?? 0 }}%"></div></div>
+    <div class="small text-muted d-flex justify-content-between"><span>Travail terminé</span><span>{{ work }} %</span></div>
+    <div class="progress" style="height: 10px"><div class="progress-bar bg-{{ health }}" style="width: {{ work }}%"></div></div>
+{% endmacro %}
+
+{% macro sprint_dates(sprint) %}
+    <i class="bi bi-calendar-event"></i>
+    {{ sprint.startDate ? sprint.startDate|date('d/m/Y') : '?' }}
+    <i class="bi bi-arrow-right"></i>
+    {{ sprint.endDate ? sprint.endDate|date('d/m/Y') : '?' }}
+{% endmacro %}

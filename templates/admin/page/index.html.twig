@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Pages Confluence{% endblock %}
+
+{% block body %}
+    {{ include('admin/_header.html.twig', {icon: 'file-earmark-text', title: 'Pages Confluence rattachées', actions: [{url: path('admin_page_new'), icon: 'plus-lg', label: 'Rattacher une page'}]}) }}
+    <div class="card">
+        <table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>Projet</th><th>Catégorie</th><th>Titre</th><th>Id</th><th>Alerte</th><th></th></tr></thead>
+            <tbody>
+            {% for page in pages %}
+                <tr>
+                    <td>{{ page.project.name }}</td>
+                    <td class="small">{{ page.categoryLabel }}</td>
+                    <td>{% if page.url %}<a href="{{ page.url }}" target="_blank" rel="noopener">{{ page.title }}</a>{% else %}{{ page.title }}{% endif %}</td>
+                    <td><code class="small">{{ page.pageId ?? '—' }}</code></td>
+                    <td class="small">{{ page.maxAgeDays ? page.maxAgeDays ~ ' j' : '—' }}</td>
+                    <td class="text-end"><a href="{{ path('admin_page_edit', {id: page.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Aucune page rattachée.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

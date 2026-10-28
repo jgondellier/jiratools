@@ -1,0 +1,29 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Paramétrage des projets{% endblock %}
+
+{% block body %}
+    {{ include('admin/_header.html.twig', {icon: 'kanban', title: 'Paramétrage des projets', actions: [{url: path('admin_project_new'), icon: 'plus-lg', label: 'Nouveau projet'}]}) }}
+    <div class="card">
+        <table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>Projet</th><th>Jira</th><th>Composants</th><th>Board</th><th>Équipes</th><th>Confluence</th><th></th></tr></thead>
+            <tbody>
+            {% for project in projects %}
+                <tr class="{{ not project.active ? 'text-muted' }}">
+                    <td><a href="{{ path('project_show', {id: project.id}) }}">{{ project.name }}</a>{% if not project.active %} <span class="badge text-bg-secondary">inactif</span>{% endif %}</td>
+                    <td><code>{{ project.jiraProjectKey }}</code></td>
+                    <td class="small">{{ project.components|join(', ') ?: 'tous' }}</td>
+                    <td>{{ project.jiraBoardId ?? '—' }}</td>
+                    <td class="small">{{ project.teams|map(t => t.name)|join(', ') ?: '—' }}</td>
+                    <td class="small">{{ project.confluenceSpaceKey ?? '—' }} · {{ project.confluencePages|length }} page(s)
+                        <a href="{{ path('admin_page_new', {project: project.id}) }}" title="Rattacher une page"><i class="bi bi-plus-circle"></i></a></td>
+                    <td class="text-end"><a href="{{ path('admin_project_edit', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Aucun projet.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mt-2"><i class="bi bi-info-circle"></i> Plusieurs projets peuvent partager le même projet Jira (backlog commune) : ils sont alors distingués par leurs composants.</p>
+{% endblock %}

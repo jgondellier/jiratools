@@ -1,0 +1,30 @@
+{% import '_macros.html.twig' as ui %}
+{# Carte de synthèse d'un sprint actif : variable "report" #}
+<div class="card h-100 border-{{ report.health }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <a href="{{ path('sprint_show', {id: report.project.id, sprint: report.sprint.id}) }}" class="fw-semibold text-decoration-none">{{ report.project.name }}</a>
+            <span class="text-muted">· {{ report.sprint.name }}</span>
+        </div>
+        {% if report.remainingDays is not null %}
+            <span class="badge {{ report.remainingDays <= 2 ? 'text-bg-danger' : (report.remainingDays <= 4 ? 'text-bg-warning' : 'text-bg-secondary') }}">
+                {% if report.remainingDays == 0 %}Fin dépassée{% else %}J-{{ report.remainingDays }}{% endif %}
+            </span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="small mb-2">{{ ui.sprint_dates(report.sprint) }}
+            {% if report.totalDays %}<span class="text-muted">({{ report.totalDays }} j{{ report.remainingDays is not null ? ', ' ~ report.remainingDays ~ ' restants' }})</span>{% endif %}
+        </div>
+        {% if report.sprint.goal %}<p class="small fst-italic mb-2"><i class="bi bi-bullseye"></i> {{ report.sprint.goal }}</p>{% endif %}
+        {{ ui.progress(report.timeProgress, report.workProgress, report.health) }}
+        <div class="d-flex flex-wrap gap-2 mt-2 small">
+            <span class="badge text-bg-secondary">À faire : {{ report.countByCategory.new }}</span>
+            <span class="badge text-bg-primary">En cours : {{ report.countByCategory.indeterminate }}</span>
+            <span class="badge text-bg-success">Terminés : {{ report.countByCategory.done }}</span>
+            {% if report.usesPoints %}<span class="badge text-bg-info">{{ report.pointsByCategory.done }} / {{ report.totalPoints }} pts</span>{% endif %}
+            {% if report.alertCount %}<span class="badge text-bg-danger"><i class="bi bi-exclamation-triangle"></i> {{ report.alertCount }} qui traînent</span>{% endif %}
+            {% if report.flagged|length %}<span class="badge text-bg-danger"><i class="bi bi-flag-fill"></i> {{ report.flagged|length }} bloqués</span>{% endif %}
+        </div>
+    </div>
+</div>

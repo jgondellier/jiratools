@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Qui fait quoi{% endblock %}
+
+{% block body %}
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-people"></i> Qui fait quoi, maintenant</h1>
+        <div class="d-flex align-items-center gap-2">
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ path('dashboard') }}" class="btn btn-outline-secondary {{ not team_id ? 'active' }}">Toutes les équipes</a>
+                {% for team in all_teams %}
+                    <a href="{{ path('dashboard', {team: team.id}) }}" class="btn btn-outline-secondary {{ team_id == team.id ? 'active' }}">{{ team.name }}</a>
+                {% endfor %}
+            </div>
+            <a href="{{ path('dashboard', {team: team_id ?: null, refresh: 1}) }}" class="btn btn-sm btn-primary" title="Forcer l'actualisation depuis Jira"><i class="bi bi-arrow-clockwise"></i></a>
+        </div>
+    </div>
+
+    <div data-autorefresh="{{ refresh_seconds }}" data-url="{{ path('dashboard', {team: team_id ?: null, partial: 1}) }}">
+        {{ include('dashboard/_board.html.twig') }}
+    </div>
+{% endblock %}

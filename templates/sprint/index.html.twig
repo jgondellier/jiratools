@@ -1,0 +1,47 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}Sprints{% endblock %}
+
+{% block body %}
+    <h1 class="h3 mb-3"><i class="bi bi-calendar-range"></i> Sprints en cours</h1>
+
+    {% if rows is empty %}
+        <div class="alert alert-info">Aucun projet actif. <a href="{{ path('admin_project_new') }}">Créer un projet</a></div>
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        {% for row in rows %}
+            {% for report in row.reports %}
+                <div class="col-12 col-lg-6 col-xxl-4">{{ include('sprint/_card.html.twig', {report: report}) }}</div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    <h2 class="h5">Calendrier</h2>
+    <div class="card">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Projet</th><th>Sprint en cours</th><th>Début</th><th>Fin</th><th>Jours restants</th><th>Sprint suivant</th></tr></thead>
+            <tbody>
+            {% for row in rows %}
+                {% for report in row.reports %}
+                    <tr>
+                        <td><a href="{{ path('sprint_show', {id: row.project.id}) }}">{{ row.project.name }}</a></td>
+                        <td>{{ report.sprint.name }}</td>
+                        <td>{{ report.sprint.startDate ? report.sprint.startDate|date('d/m/Y') : '—' }}</td>
+                        <td>{{ report.sprint.endDate ? report.sprint.endDate|date('d/m/Y') : '—' }}</td>
+                        <td>{{ report.remainingDays ?? '—' }}</td>
+                        <td>{% if row.next %}{{ row.next.name }}{% if row.next.startDate %} <span class="text-muted small">({{ ui.sprint_dates(row.next) }})</span>{% endif %}{% else %}—{% endif %}</td>
+                    </tr>
+                {% else %}
+                    <tr class="text-muted">
+                        <td><a href="{{ path('sprint_show', {id: row.project.id}) }}">{{ row.project.name }}</a></td>
+                        <td colspan="4">{% if row.project.jiraBoardId %}Aucun sprint actif{% else %}Pas de board Scrum paramétré{% endif %}</td>
+                        <td>{% if row.next %}{{ row.next.name }}{% else %}—{% endif %}</td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

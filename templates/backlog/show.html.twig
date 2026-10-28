@@ -1,0 +1,122 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}Backlog · {{ project.name }}{% endblock %}
+
+{% block body %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-list-task"></i> Backlog</h1>
+        <ul class="nav nav-pills">
+            {% for p in projects %}
+                <li class="nav-item"><a class="nav-link py-1 {{ p.id == project.id ? 'active' }}" href="{{ path('backlog_show', {id: p.id}) }}">{{ p.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-3">
+            <div class="card mb-3">
+                <div class="card-header">Filtres</div>
+                <form class="card-body" method="get">
+                    <div class="mb-2">
+                        <label class="form-label small">Composant</label>
+                        <select name="component" class="form-select form-select-sm">
+                            <option value="">Tous</option>
+                            {% for name, count in summary.components %}
+                                {% if name != '(sans composant)' %}<option value="{{ name }}" {{ filters.component == name ? 'selected' }}>{{ name }} ({{ count }})</option>{% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Étiquette (sujet)</label>
+                        <select name="label" class="form-select form-select-sm">
+                            <option value="">Toutes</option>
+                            <option value="__none__" {{ filters.label == '__none__' ? 'selected' }}>— Sans étiquette ({{ summary.unlabelled }}) —</option>
+                            {% for name, count in summary.labels %}
+                                <option value="{{ name }}" {{ filters.label == name ? 'selected' }}>{{ name }} ({{ count }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Type</label>
+                        <select name="type" class="form-select form-select-sm">
+                            <option value="">Tous</option>
+                            {% for name, count in summary.types %}
+                                <option value="{{ name }}" {{ filters.type == name ? 'selected' }}>{{ name }} ({{ count }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Texte</label>
+                        <input type="search" name="text" value="{{ filters.text }}" class="form-control form-control-sm" placeholder="Rechercher…">
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="includeSprint" value="1" id="includeSprint" {{ filters.includeSprint ? 'checked' }}>
+                        <label class="form-check-label small" for="includeSprint">Inclure le sprint en cours</label>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary flex-fill"><i class="bi bi-funnel"></i> Filtrer</button>
+                        <a href="{{ path('backlog_show', {id: project.id}) }}" class="btn btn-sm btn-outline-secondary">Effacer</a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Synthèse</div>
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item d-flex justify-content-between"><span>Tickets</span><strong>{{ filtered_summary.types|reduce((c, x) => c + x, 0) }}</strong></li>
+                    <li class="list-group-item d-flex justify-content-between"><span>Points estimés</span><strong>{{ filtered_summary.points }}</strong></li>
+                    <li class="list-group-item d-flex justify-content-between {{ filtered_summary.unestimated ? 'text-warning-emphasis' }}"><span>Non estimés</span><strong>{{ filtered_summary.unestimated }}</strong></li>
+                    <li class="list-group-item d-flex justify-content-between {{ filtered_summary.unlabelled ? 'text-warning-emphasis' }}"><span>Sans étiquette</span><strong>{{ filtered_summary.unlabelled }}</strong></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Par composant</div>
+                <ul class="list-group list-group-flush small">
+                    {% for name, count in summary.components %}
+                        <li class="list-group-item d-flex justify-content-between"><span>{{ name }}</span><span class="badge text-bg-secondary">{{ count }}</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><strong>{{ issues|length }}</strong> ticket(s) · <code class="small">{{ project.jiraProjectKey }}</code>{% if project.components %} · composants : {{ project.components|join(', ') }}{% endif %}</span>
+                    <a href="{{ jira_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right"></i> Ouvrir dans Jira</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-issues mb-0">
+                        <thead class="table-light">
+                        <tr><th>#</th><th>Clé</th><th>Résumé</th><th>Statut</th><th>Composants</th><th>Étiquettes</th><th class="text-end">Pts</th><th>Assigné</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for view in issues %}
+                            {% set issue = view.issue %}
+                            <tr class="level-{{ view.age.level }}">
+                                <td class="text-muted small">{{ loop.index }}</td>
+                                <td class="text-nowrap">
+                                    {% if issue.typeIcon %}<img src="{{ issue.typeIcon }}" width="14" height="14" alt="" title="{{ issue.type }}">{% endif %}
+                                    {% if issue.priorityIcon %}<img src="{{ issue.priorityIcon }}" width="14" height="14" alt="" title="{{ issue.priority }}">{% endif %}
+                                    <a href="{{ issue.url }}" target="_blank" rel="noopener">{{ issue.key }}</a>
+                                </td>
+                                <td>{{ issue.summary }}{% if issue.parentKey %} <span class="text-muted small">← {{ issue.parentSummary ?? issue.parentKey }}</span>{% endif %}</td>
+                                <td class="text-nowrap">{{ ui.status_badge(issue) }} {% if view.age.alert %}{{ ui.age_badge(view.age) }}{% endif %}</td>
+                                <td class="small">{{ issue.components|join(', ') }}</td>
+                                <td>{% for l in issue.labels %}<span class="badge text-bg-light border">{{ l }}</span> {% else %}<span class="text-warning-emphasis small" title="Pas d'étiquette : ira dans 'Autres évolutions' de la release note"><i class="bi bi-tag"></i> ?</span>{% endfor %}</td>
+                                <td class="text-end">{% if issue.storyPoints is not null %}{{ issue.storyPoints }}{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                                <td class="small text-nowrap">{{ issue.assigneeName ?? '' }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="8" class="text-center text-muted py-4">Aucun ticket.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer small text-muted"><code>{{ jql }}</code></div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

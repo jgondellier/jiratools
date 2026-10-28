@@ -1,0 +1,14 @@
+{#- Format "storage" Confluence (XHTML) -#}
+<ac:structured-macro ac:name="info"><ac:rich-text-body><p>Release note générée automatiquement depuis Jira le {{ 'now'|date('d/m/Y à H:i') }}. Requête : <code>{{ jql }}</code></p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="toc"><ac:parameter ac:name="maxLevel">2</ac:parameter></ac:structured-macro>
+{% for label, issues in groups %}
+<h2>{{ label|humanize_label }}</h2>
+<table>
+<tbody>
+<tr><th>Ticket</th><th>Type</th><th>Description</th><th>Statut</th></tr>
+{% for issue in issues %}
+<tr><td><a href="{{ issue.url }}">{{ issue.key }}</a></td><td>{{ issue.type }}</td><td>{{ issue.summary }}</td><td>{{ issue.status }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endfor %}

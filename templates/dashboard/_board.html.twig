@@ -1,0 +1,98 @@
+{% import '_macros.html.twig' as ui %}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md">
+        <div class="card stat-card h-100"><div class="card-body py-2">
+            <div class="text-muted small">Membres suivis</div><div class="display-6">{{ stats.members }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card stat-card h-100 {{ stats.idle ? 'border-danger text-danger' }}"><div class="card-body py-2">
+            <div class="small"><i class="bi bi-person-x"></i> Sans ticket en cours</div><div class="display-6">{{ stats.idle }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card stat-card h-100 {{ stats.overWip ? 'border-warning' }}"><div class="card-body py-2">
+            <div class="small"><i class="bi bi-stack"></i> Trop de tickets en parallèle</div><div class="display-6">{{ stats.overWip }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card stat-card h-100 {{ stats.warning ? 'border-warning' }}"><div class="card-body py-2">
+            <div class="small"><i class="bi bi-exclamation-triangle"></i> Tickets qui traînent</div><div class="display-6">{{ stats.warning }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card stat-card h-100 {{ stats.critical ? 'border-danger text-danger' }}"><div class="card-body py-2">
+            <div class="small"><i class="bi bi-exclamation-octagon"></i> Tickets en alerte rouge</div><div class="display-6">{{ stats.critical }}</div>
+        </div></div>
+    </div>
+</div>
+
+{% for row in board %}
+    <section class="mb-4">
+        <h2 class="h5 team-header mb-3" style="--team-color: {{ row.team.color }}">
+            {{ row.team.name }}
+            <small class="text-muted fw-normal">· WIP max {{ row.team.wipLimit }} / pers.</small>
+        </h2>
+        {% if row.members is empty %}
+            <p class="text-muted">Aucun membre actif. <a href="{{ path('admin_developer_new', {team: row.team.id}) }}">Ajouter un membre</a></p>
+        {% endif %}
+        <div class="row g-3">
+            {% for member in row.members %}
+                <div class="col-12 col-md-6 col-xl-4 col-xxl-3">
+                    <div class="card member-card h-100 {{ member.cardClass }} {{ member.idleAlert ? 'idle' }}">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                {{ ui.avatar(member.developer.displayName, member.developer.avatarUrl) }}
+                                <div class="min-w-0">
+                                    <div class="fw-semibold text-truncate">{{ member.developer.displayName }}</div>
+                                    <div class="small text-muted">{{ member.developer.roleLabel }}</div>
+                                </div>
+                                <div class="ms-auto text-end">
+                                    {% if member.idleAlert %}
+                                        <span class="badge text-bg-danger"><i class="bi bi-person-x"></i> Aucun ticket</span>
+                                    {% elseif member.idle %}
+                                        <span class="badge text-bg-secondary">Aucun ticket</span>
+                                    {% elseif member.overWip %}
+                                        <span class="badge text-bg-warning" title="Limite WIP : {{ member.wipLimit }}"><i class="bi bi-stack"></i> {{ member.inProgress|length }} en cours</span>
+                                    {% else %}
+                                        <span class="badge text-bg-success">{{ member.inProgress|length }} en cours</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% for view in member.inProgress %}
+                                {{ ui.issue_line(view) }}
+                            {% else %}
+                                <div class="text-muted small">
+                                    {% if member.lastActivity %}
+                                        Dernier ticket touché :
+                                        <a href="{{ member.lastActivity.issue.url }}" target="_blank" rel="noopener">{{ member.lastActivity.issue.key }}</a>
+                                        {{ member.lastActivity.issue.summary|length > 60 ? member.lastActivity.issue.summary|slice(0, 60) ~ '…' : member.lastActivity.issue.summary }}
+                                        ({{ member.lastActivity.issue.status }}, mis à jour le {{ member.lastActivity.issue.updated|date('d/m H:i') }})
+                                    {% else %}
+                                        Aucune activité Jira depuis 15 jours.
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+{% endfor %}
+
+{% if unassigned is not empty %}
+    <section class="mb-4">
+        <h2 class="h5 team-header mb-3" style="--team-color: #dc3545">Tickets en cours sans personne assignée <span class="badge text-bg-danger">{{ unassigned|length }}</span></h2>
+        <div class="card"><div class="card-body">
+            {% for view in unassigned %}{{ ui.issue_line(view) }}{% endfor %}
+        </div></div>
+    </section>
+{% endif %}
+
+<p class="text-muted small refresh-indicator">
+    Données Jira du {{ generated_at|date('d/m/Y à H:i:s') }}
+    {% if refresh_seconds > 0 %} · actualisation automatique dans <span data-refresh-counter>{{ refresh_seconds }} s</span>{% endif %}
+</p>

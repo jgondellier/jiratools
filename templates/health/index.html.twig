@@ -1,0 +1,64 @@
+{% extends 'base.html.twig' %}
+{% import '_macros.html.twig' as ui %}
+
+{% block title %}Suivi & alertes{% endblock %}
+
+{% block body %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-heart-pulse"></i> Suivi &amp; alertes</h1>
+        <div class="btn-group btn-group-sm">
+            <a href="{{ path('health') }}" class="btn btn-outline-secondary {{ not project_id ? 'active' }}">Tous les projets</a>
+            {% for p in projects %}<a href="{{ path('health', {project: p.id}) }}" class="btn btn-outline-secondary {{ project_id == p.id ? 'active' }}">{{ p.name }}</a>{% endfor %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <span><i class="bi bi-hourglass-split"></i> Tickets qui traînent dans leur statut <span class="badge {{ stuck is empty ? 'text-bg-success' : 'text-bg-danger' }}">{{ stuck|length }}</span></span>
+            <a href="{{ path('admin_rule_index') }}" class="small">Régler les seuils</a>
+        </div>
+        <div class="card-body">
+            {% for view in stuck %}{{ ui.issue_line(view, {assignee: true}) }}{% else %}<p class="text-muted mb-0">Aucun ticket au-delà des seuils 👍</p>{% endfor %}
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        {% for id, check in checks %}
+            <div class="col-12 col-xl-6">
+                <div class="card h-100 {{ check.issues is not empty ? 'border-warning' }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>{{ check.title }} <span class="badge {{ check.issues is empty ? 'text-bg-success' : 'text-bg-warning' }}">{{ check.issues|length }}</span></span>
+                        <a href="{{ check.url }}" target="_blank" rel="noopener" class="small"><i class="bi bi-box-arrow-up-right"></i> Jira</a>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">{{ check.help }}</p>
+                        {% if check.error %}
+                            <div class="alert alert-light border small mb-0"><i class="bi bi-info-circle"></i> Contrôle indisponible sur votre Jira : {{ check.error }}</div>
+                        {% endif %}
+                        {% for view in check.issues|slice(0, 10) %}{{ ui.issue_line(view, {assignee: true}) }}{% endfor %}
+                        {% if check.issues|length > 10 %}<p class="small mt-2 mb-0"><a href="{{ check.url }}" target="_blank" rel="noopener">… et {{ check.issues|length - 10 }} autre(s) dans Jira</a></p>{% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><i class="bi bi-file-earmark-excel"></i> Pages Confluence à mettre à jour <span class="badge text-bg-secondary">{{ pages|length }}</span></div>
+        <ul class="list-group list-group-flush">
+            {% for item in pages %}
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>
+                        <span class="badge text-bg-light border">{{ item.page.project.name }}</span>
+                        {% set url = item.info ? item.info.url : item.page.url %}
+                        {% if url %}<a href="{{ url }}" target="_blank" rel="noopener">{{ item.page.title }}</a>{% else %}{{ item.page.title }}{% endif %}
+                    </span>
+                    {% if item.error %}<span class="text-danger small">{{ item.error }}</span>
+                    {% else %}<span class="small">modifiée il y a <strong>{{ item.info.ageDays }} j</strong> (seuil {{ item.page.maxAgeDays }} j)</span>{% endif %}
+                </li>
+            {% else %}
+                <li class="list-group-item text-muted">Aucune page obsolète (seules les pages avec un délai d'alerte sont contrôlées).</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock %}
