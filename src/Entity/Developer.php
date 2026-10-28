@@ -19,6 +19,15 @@ class Developer
         'Autre' => 'other',
     ];
 
+    /** Libellé court de l'activité attendue, par rôle (badge de "Qui fait quoi") */
+    public const WORK_LABELS = [
+        'dev' => 'en dev',
+        'qa' => 'en test',
+        'lead' => 'en dev',
+        'po' => 'en cours',
+        'other' => 'en cours',
+    ];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -121,6 +130,11 @@ class Developer
     public function getRoleLabel(): string
     {
         return array_search($this->role, self::ROLES, true) ?: $this->role;
+    }
+
+    public function getWorkLabel(): string
+    {
+        return self::WORK_LABELS[$this->role] ?? 'en cours';
     }
 
     public function setRole(string $role): static

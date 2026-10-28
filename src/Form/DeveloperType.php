@@ -33,7 +33,7 @@ class DeveloperType extends AbstractType
             ])
             ->add('active', CheckboxType::class, ['label' => 'Suivi dans "Qui fait quoi"', 'required' => false])
             ->add('expectedOnTicket', CheckboxType::class, [
-                'label' => 'Alerter si aucun ticket en développement',
+                'label' => 'Alerter si aucun ticket de travail (selon son rôle)',
                 'help' => 'Décochez pour un PO, un manager ou une personne à temps partiel.',
                 'required' => false,
             ]);

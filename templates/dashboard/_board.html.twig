@@ -8,7 +8,7 @@
     </div>
     <div class="col-6 col-md">
         <div class="card stat-card h-100 {{ stats.idle ? 'border-danger text-danger' }}"><div class="card-body py-2">
-            <div class="small"><i class="bi bi-person-x"></i> Sans ticket en développement</div><div class="display-6">{{ stats.idle }}</div>
+            <div class="small"><i class="bi bi-person-x"></i> Sans ticket de travail</div><div class="display-6">{{ stats.idle }}</div>
         </div></div>
     </div>
     <div class="col-6 col-md">
@@ -50,24 +50,24 @@
                                 </div>
                                 <div class="ms-auto text-end">
                                     {% if member.idleAlert %}
-                                        <span class="badge text-bg-danger"><i class="bi bi-person-x"></i> Aucun ticket en dev</span>
+                                        <span class="badge text-bg-danger"><i class="bi bi-person-x"></i> Aucun ticket {{ member.developer.workLabel }}</span>
                                     {% elseif member.idle %}
-                                        <span class="badge text-bg-secondary">Aucun ticket en dev</span>
+                                        <span class="badge text-bg-secondary">Aucun ticket {{ member.developer.workLabel }}</span>
                                     {% elseif member.overWip %}
-                                        <span class="badge text-bg-warning" title="Limite WIP : {{ member.wipLimit }}"><i class="bi bi-stack"></i> {{ member.development|length }} en dev</span>
+                                        <span class="badge text-bg-warning" title="Limite WIP : {{ member.wipLimit }}"><i class="bi bi-stack"></i> {{ member.work|length }} {{ member.developer.workLabel }}</span>
                                     {% else %}
-                                        <span class="badge text-bg-success"><i class="bi bi-code-slash"></i> {{ member.development|length }} en dev</span>
+                                        <span class="badge text-bg-success"><i class="bi bi-code-slash"></i> {{ member.work|length }} {{ member.developer.workLabel }}</span>
                                     {% endif %}
                                 </div>
                             </div>
 
-                            {% for view in member.development %}
+                            {% for view in member.work %}
                                 {{ ui.issue_line(view) }}
                             {% endfor %}
 
                             {% if member.otherWork is not empty %}
                                 <div class="other-work mt-2">
-                                    <div class="small text-muted mb-1"><i class="bi bi-arrow-repeat"></i> Autres tickets en cours (hors développement)</div>
+                                    <div class="small text-muted mb-1"><i class="bi bi-arrow-repeat"></i> Autres tickets en cours</div>
                                     {% for view in member.otherWork %}
                                         {{ ui.issue_line(view) }}
                                     {% endfor %}
@@ -102,12 +102,15 @@
 {% endif %}
 
 <p class="text-muted small refresh-indicator">
-    {% if development_statuses is empty %}
-        « En développement » = statuts de la catégorie Jira <em>En cours</em>
+    Statuts de travail :
+    {% if work_statuses is empty %}
+        catégorie Jira <em>En cours</em> pour tous les rôles
     {% else %}
-        « En développement » = {{ development_statuses|join(', ') }}
+        {% for key, statuses in work_statuses %}
+            <strong>{{ key == 'default' ? 'par défaut' : (constant('App\\Entity\\Developer::ROLES')|filter(v => v == key)|keys|first) }}</strong> = {{ statuses|join(', ') }}{{ not loop.last ? ' ; ' }}
+        {% endfor %}
     {% endif %}
-    (<a href="{{ path('admin_dev_statuses') }}">paramétrer</a>) ·
+    (<a href="{{ path('admin_work_statuses') }}">paramétrer</a>) ·
     Données Jira du {{ generated_at|date('d/m/Y à H:i:s') }}
     {% if refresh_seconds > 0 %} · actualisation automatique dans <span data-refresh-counter>{{ refresh_seconds }} s</span>{% endif %}
 </p>

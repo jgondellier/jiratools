@@ -79,28 +79,51 @@ class AppTest extends WebTestCase
         self::assertStringContainsString('level-critical', $html, 'Ticket depuis 10 jours en "En cours" => alerte rouge');
         self::assertSelectorTextContains('.member-card.idle', 'Bob Petit');
 
-        // Seul "En cours" compte comme du développement : le ticket en Code Review d'Alice passe en "autres tickets"
-        $crawler = $this->client->request('GET', '/parametrage/statuts-developpement');
-        self::assertSelectorExists('input[value="Code Review"]');
-        $form = $crawler->selectButton('Enregistrer')->form();
-        foreach ($form['statuses'] as $checkbox) {
-            if ('En cours' === $checkbox->availableOptionValues()[0]) {
-                $checkbox->tick();
-            }
-        }
-        $this->client->submit($form);
-        self::assertResponseRedirects('/parametrage/statuts-developpement');
-
-        $crawler = $this->client->request('GET', '/');
-        $alice = $crawler->filter('.member-card')->reduce(fn ($card) => str_contains($card->text(), 'Alice Martin'));
-        self::assertCount(1, $alice);
+        // Par défaut seul "En cours" compte : le ticket en Code Review d'Alice (développeuse) passe en "autres tickets"
+        $this->saveWorkStatuses(['default' => 'En cours']);
+        $alice = $this->memberCard('Alice Martin');
         self::assertStringContainsString('idle', $alice->attr('class'), 'Alice n\'a aucun ticket en développement');
         self::assertStringContainsString('APP-1', $alice->filter('.other-work')->text());
-        self::assertSelectorTextContains('.refresh-indicator', 'En cours');
+        self::assertStringContainsString('Aucun ticket en dev', $alice->text());
+
+        // Pour une testeuse dont le rôle QA compte "Code Review", le même ticket est son travail
+        $this->em->getRepository(Developer::class)->findOneBy(['jiraAccountId' => 'acc-alice'])->setRole('qa');
+        $this->em->flush();
+        $this->saveWorkStatuses(['default' => 'En cours', 'qa' => 'Code Review']);
+        $alice = $this->memberCard('Alice Martin');
+        self::assertStringNotContainsString('idle', $alice->attr('class'));
+        self::assertStringContainsString('1 en test', $alice->text());
+        self::assertCount(0, $alice->filter('.other-work'));
 
         foreach (['/sprints', '/sprints/1', '/backlog/1', '/suivi', '/projets/1', '/sprints/1?sprint=', '/?team=', '/suivi?project=', '/parametrage/connexion', '/parametrage/membres/import?project=APP'] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful($url);
         }
+    }
+
+    /**
+     * Coche les statuts donnés (colonne => statut) dans le paramétrage des statuts de travail.
+     */
+    private function saveWorkStatuses(array $checks): void
+    {
+        $crawler = $this->client->request('GET', '/parametrage/statuts-de-travail');
+        $form = $crawler->selectButton('Enregistrer')->form();
+        foreach ($form->all() as $name => $field) {
+            if ($field instanceof \Symfony\Component\DomCrawler\Field\ChoiceFormField && 'checkbox' === $field->getType()) {
+                preg_match('/^work\[(\w+)\]/', $name, $m);
+                ($checks[$m[1]] ?? null) === $field->availableOptionValues()[0] ? $field->tick() : $field->untick();
+            }
+        }
+        $this->client->submit($form);
+        self::assertResponseRedirects('/parametrage/statuts-de-travail');
+    }
+
+    private function memberCard(string $name): \Symfony\Component\DomCrawler\Crawler
+    {
+        $crawler = $this->client->request('GET', '/');
+        $card = $crawler->filter('.member-card')->reduce(fn ($c) => str_contains($c->text(), $name));
+        self::assertCount(1, $card);
+
+        return $card;
     }
 }

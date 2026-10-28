@@ -10,7 +10,7 @@ use App\Jira\JiraClient;
 use App\Repository\ProjectRepository;
 
 /**
- * "Qui fait quoi" : ticket(s) en cours de développement de chaque membre, membres sans ticket.
+ * "Qui fait quoi" : ticket(s) de travail de chaque membre (selon son rôle), membres sans ticket.
  */
 class ActivityService
 {
@@ -18,7 +18,7 @@ class ActivityService
         private readonly JiraClient $jira,
         private readonly IssueViewFactory $views,
         private readonly ProjectRepository $projectRepository,
-        private readonly DevelopmentStatuses $developmentStatuses,
+        private readonly WorkStatuses $workStatuses,
     ) {
     }
 
@@ -51,9 +51,9 @@ class ActivityService
             foreach ($team->getActiveDevelopers() as $dev) {
                 $views = $byAssignee[$dev->getJiraAccountId()] ?? [];
                 usort($views, fn (IssueView $a, IssueView $b) => $b->age->days <=> $a->age->days);
-                $development = array_values(array_filter($views, fn (IssueView $v) => $this->developmentStatuses->isDevelopment($v->issue)));
-                $other = array_values(array_filter($views, fn (IssueView $v) => !$this->developmentStatuses->isDevelopment($v->issue)));
-                $activity = new DeveloperActivity($dev, $development, $other, $team->getWipLimit());
+                $work = array_values(array_filter($views, fn (IssueView $v) => $this->workStatuses->isWork($v->issue, $dev->getRole())));
+                $other = array_values(array_filter($views, fn (IssueView $v) => !$this->workStatuses->isWork($v->issue, $dev->getRole())));
+                $activity = new DeveloperActivity($dev, $work, $other, $team->getWipLimit());
                 if ($activity->isIdle()) {
                     $idle[$dev->getJiraAccountId()][] = $activity;
                 }
@@ -70,7 +70,7 @@ class ActivityService
     }
 
     /**
-     * Tickets en cours (catégorie "En cours" + statuts de développement paramétrés) des membres.
+     * Tickets en cours (catégorie "En cours" + statuts de travail paramétrés, tous rôles) des membres.
      *
      * @param string[] $accountIds
      *
@@ -80,7 +80,7 @@ class ActivityService
     {
         $assignees = sprintf('assignee in (%s)', JiraClient::quoteList($accountIds));
         $inProgress = 'statusCategory = "In Progress"';
-        $statuses = $this->developmentStatuses->getStatuses();
+        $statuses = $this->workStatuses->getAllStatuses();
 
         if ([] !== $statuses) {
             try {

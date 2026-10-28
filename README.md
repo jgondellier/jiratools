@@ -4,12 +4,12 @@ Application Symfony 7.4 (LTS) / PHP 8.2+ pour suivre vos équipes et vos projets
 
 | Écran | Ce qu'il montre |
 |---|---|
-| **Qui fait quoi** (page d'accueil) | Pour chaque équipe et chaque membre : le(s) ticket(s) **en cours de développement à l'instant**, depuis combien de temps il est dans son statut, et une **alerte rouge** pour qui n'a aucun ticket en développement (avec son dernier ticket touché). Ses autres tickets en cours (revue, test…) sont affichés à part. Signale aussi les personnes au-delà de la limite WIP et les tickets en cours sans personne assignée. Actualisation automatique. |
+| **Qui fait quoi** (page d'accueil) | Pour chaque équipe et chaque membre : le(s) ticket(s) **sur lesquels il travaille à l'instant** (statuts paramétrables par rôle : en développement pour un dev, en test pour la QA…), depuis combien de temps il est dans son statut, et une **alerte rouge** pour qui n'a aucun ticket de travail (avec son dernier ticket touché). Ses autres tickets en cours sont affichés à part. Signale aussi les personnes au-delà de la limite WIP et les tickets en cours sans personne assignée. Actualisation automatique. |
 | **Sprints** | Début / fin de chaque sprint actif, jours ouvrés restants, temps écoulé vs travail terminé (indicateur de santé), sprint suivant. Détail par sprint : tickets par statut, charge par personne, tickets non estimés, vélocité des derniers sprints. |
 | **Backlog** | Backlog par projet, identifié par **composants** dans un projet Jira partagé. Filtres composant / étiquette / type / texte, synthèse (points, non estimés, sans étiquette). |
 | **Suivi & alertes** | Tickets qui traînent au-delà du seuil de leur statut, tickets bloqués (drapeau), sprint : non estimés / non assignés, tickets sans composant, vieux bugs, tickets réouverts, pages Confluence obsolètes. |
 | **Projets** | Fiche projet : équipes, composants, board, pages Confluence rattachées (avec date de dernière modification), sprint en cours, tickets qui traînent. |
-| **Paramétrage** | Équipes, membres (import depuis Jira), projets (projet Jira + composants + board), pages Confluence, statuts « en développement », seuils d'alerte par statut, test de connexion. |
+| **Paramétrage** | Équipes, membres (import depuis Jira), projets (projet Jira + composants + board), pages Confluence, statuts de travail par rôle, seuils d'alerte par statut, test de connexion. |
 
 ## Installation sous EasyPHP (Windows)
 
@@ -53,9 +53,11 @@ Extensions PHP à activer dans le `php.ini` si ce n'est pas déjà le cas : `pdo
 
 1. **Équipes** : nom, couleur, limite de tickets en cours par personne (WIP).
 2. **Projets** : clé du projet Jira, **composants** qui identifient le projet dans la backlog commune (plusieurs projets peuvent partager la même clé Jira), identifiant du **board Scrum** (nombre dans l'URL du board : `.../boards/42` ou `rapidView=42`), équipes, filtre JQL additionnel optionnel.
-3. **Membres** : *Importer depuis Jira* liste les utilisateurs assignables d'un projet ; cochez-les et choisissez l'équipe. Pour un PO ou un manager, décochez « Alerter si aucun ticket en développement ».
+3. **Membres** : *Importer depuis Jira* liste les utilisateurs assignables d'un projet ; cochez-les et choisissez l'équipe. Pour un PO ou un manager, décochez « Alerter si aucun ticket de travail ».
 4. **Pages Confluence** : collez l'URL de la page (l'identifiant est déduit), choisissez une catégorie et, si besoin, un délai d'alerte « non modifiée depuis N jours ».
-5. **Statuts « en développement »** : cochez les statuts Jira qui signifient que le membre développe le ticket (la liste est lue dans vos projets Jira). Un membre sans ticket dans l'un de ces statuts passe en rouge dans « Qui fait quoi » ; ses tickets dans les autres statuts « en cours » (revue de code, test…) restent visibles à part. Sans sélection, tous les statuts de la catégorie Jira *En cours* comptent.
+5. **Statuts de travail par rôle** : tableau statuts Jira × rôles (Développeur, Testeur / QA, Lead, Product Owner, Autre), la liste des statuts étant lue dans vos projets Jira. Cochez, pour chaque rôle, les statuts qui signifient que le membre travaille sur le ticket : par exemple *En développement* pour les développeurs, *En test* pour la QA. Un membre sans ticket dans l'un des statuts de son rôle passe en rouge dans « Qui fait quoi » ; ses autres tickets en cours restent visibles à part.
+   - Un rôle sans case cochée utilise la colonne **Par défaut** ; si elle est vide aussi, tous les statuts de la catégorie Jira *En cours* comptent.
+   - Le rôle de chaque membre se choisit dans sa fiche (*Membres*).
 6. **Seuils par statut** : par exemple `Code Review` → orange après 1 jour, rouge après 2 jours. Une règle peut être globale ou propre à un projet. Sans règle, les statuts de la catégorie « En cours » utilisent les seuils par défaut (`STATUS_DEFAULT_WARNING_DAYS` / `STATUS_DEFAULT_CRITICAL_DAYS`, 3 et 5 jours). Les week-ends sont exclus des durées (`APP_EXCLUDE_WEEKENDS`).
 
 ### Autres réglages (`.env.local`)
@@ -87,7 +89,7 @@ Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectiv
 
 ## Fonctionnement
 
-- « En développement » = les statuts cochés dans *Paramétrage → Statuts « en développement »* ; à défaut, tous les statuts de la **catégorie** Jira *In Progress* (bleus).
+- « Ticket de travail » d'un membre = ticket dans un statut coché pour son rôle dans *Paramétrage → Statuts de travail par rôle* (à défaut, colonne *Par défaut*, puis tous les statuts de la **catégorie** Jira *In Progress*). La limite WIP porte sur ces tickets.
 - Les seuils d'alerte par défaut et le contrôle « tickets qui traînent » portent sur toute la catégorie *In Progress* (un ticket bloqué en revue reste signalé).
 - L'**entrée dans le statut** est calculée à partir de l'historique du ticket (dernier changement de statut).
 - La **vélocité** compte les tickets terminés avant la clôture de chaque sprint.
