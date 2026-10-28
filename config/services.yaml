@@ -32,7 +32,6 @@ services:
             $user: '%env(JIRA_USER)%'
             $token: '%env(JIRA_API_TOKEN)%'
             $cacheTtl: '%env(int:APP_CACHE_TTL)%'
-            $verifySsl: '%env(bool:ATLASSIAN_VERIFY_SSL)%'
 
     app.confluence_http:
         class: App\Atlassian\AtlassianHttp
@@ -42,7 +41,6 @@ services:
             $user: '%env(CONFLUENCE_USER)%'
             $token: '%env(CONFLUENCE_API_TOKEN)%'
             $cacheTtl: '%env(int:APP_CACHE_TTL)%'
-            $verifySsl: '%env(bool:ATLASSIAN_VERIFY_SSL)%'
 
     App\Atlassian\AtlassianHttp: '@app.jira_http'
 

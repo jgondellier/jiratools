@@ -17,6 +17,14 @@
         {% endfor %}
     </div>
     <div class="card mt-3">
+        <div class="card-header">Options de connexion HTTP</div>
+        <table class="table table-sm mb-0 small">
+            {% for name, value in http_options %}
+                <tr class="{{ value starts with 'NON' or value ends with 'introuvable !' ? 'table-warning' }}"><th class="ps-3" style="width: 260px"><code>{{ name }}</code></th><td>{{ value }}</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="card mt-3">
         <div class="card-body small">
             <p class="mb-2">Les paramètres se règlent dans le fichier <code>.env.local</code> à la racine de l'application :</p>
 <pre class="mb-0">JIRA_BASE_URL=https://mon-site.atlassian.net
@@ -24,7 +32,13 @@ JIRA_USER=prenom.nom@entreprise.fr        # vide pour Jira Server/DC (jeton PAT)
 JIRA_API_TOKEN=xxxxxxxx
 CONFLUENCE_BASE_URL=https://mon-site.atlassian.net/wiki
 CONFLUENCE_USER=prenom.nom@entreprise.fr
-CONFLUENCE_API_TOKEN=xxxxxxxx</pre>
+CONFLUENCE_API_TOKEN=xxxxxxxx
+
+# Réseau d'entreprise (facultatif)
+APP_HTTP_PROXY=http://proxy.entreprise.fr:8080
+APP_HTTP_CAFILE=C:/EasyPHP/certs/ca-entreprise.pem
+APP_HTTP_VERIFY_PEER=1
+APP_HTTP_VERIFY_HOST=1</pre>
         </div>
     </div>
 {% endblock %}

@@ -27,7 +27,6 @@ class AtlassianHttp
         private readonly string $user,
         private readonly string $token,
         private readonly int $cacheTtl = 60,
-        private readonly bool $verifySsl = true,
     ) {
     }
 
@@ -75,11 +74,6 @@ class AtlassianHttp
             $options['auth_basic'] = [$this->user, $this->token];
         } else {
             $options['auth_bearer'] = $this->token;
-        }
-        $options['timeout'] ??= 30;
-        if (!$this->verifySsl) {
-            $options['verify_peer'] = false;
-            $options['verify_host'] = false;
         }
 
         $url = $this->getBaseUrl().'/'.ltrim($path, '/');

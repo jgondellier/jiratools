@@ -17,6 +17,16 @@ framework:
     php_errors:
         log: true
 
+    # Options de connexion HTTP communes aux appels Jira et Confluence (voir .env)
+    http_client:
+        default_options:
+            verify_peer: '%env(bool:APP_HTTP_VERIFY_PEER)%'
+            verify_host: '%env(bool:APP_HTTP_VERIFY_HOST)%'
+            cafile: '%env(default::APP_HTTP_CAFILE)%'
+            proxy: '%env(default::APP_HTTP_PROXY)%'
+            no_proxy: '%env(default::APP_HTTP_NO_PROXY)%'
+            timeout: '%env(float:APP_HTTP_TIMEOUT)%'
+
 when@test:
     framework:
         test: true

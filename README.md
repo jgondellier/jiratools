@@ -70,7 +70,21 @@ Extensions PHP à activer dans le `php.ini` si ce n'est pas déjà le cas : `pdo
 | `APP_CACHE_TTL` | `60` | Cache des appels Jira/Confluence (s). Le bouton ⟳ ou `?refresh=1` force l'actualisation |
 | `APP_REFRESH_SECONDS` | `120` | Actualisation automatique de « Qui fait quoi » (0 = désactivée) |
 | `RELEASE_NOTE_IGNORED_LABELS` | *(vide)* | Étiquettes à ignorer dans la release note (ex. `technique,interne`) |
-| `ATLASSIAN_VERIFY_SSL` | `1` | Mettre `0` uniquement si un proxy d'entreprise intercepte le SSL |
+
+### Options de connexion HTTP (réseau d'entreprise)
+
+Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectives sont visibles sur *Paramétrage → Tester la connexion*.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `APP_HTTP_VERIFY_PEER` | `1` | Vérifie le certificat SSL du serveur. `0` le désactive (déconseillé : préférez `APP_HTTP_CAFILE`) |
+| `APP_HTTP_VERIFY_HOST` | `1` | Vérifie que le nom du serveur correspond au certificat |
+| `APP_HTTP_CAFILE` | *(vide)* | Fichier PEM de l'autorité de certification interne, ex. `C:/EasyPHP/certs/ca-entreprise.pem` |
+| `APP_HTTP_PROXY` | *(vide)* | Proxy sortant, ex. `http://proxy.entreprise.fr:8080` ou `http://user:mdp@proxy:8080` |
+| `APP_HTTP_NO_PROXY` | *(vide)* | Hôtes joints sans proxy, séparés par des virgules, ex. `localhost,.intranet.fr`. Vide = variable système `NO_PROXY` |
+| `APP_HTTP_TIMEOUT` | `30` | Délai maximal sans réponse, en secondes |
+
+**Erreur « SSL certificate problem: unable to get local issuer certificate » sous Windows** : PHP ne connaît pas l'autorité qui a signé le certificat (souvent un proxy d'entreprise qui inspecte le SSL). Exportez le certificat racine de l'entreprise (depuis le navigateur, au format *Base64 / PEM*) et indiquez son chemin dans `APP_HTTP_CAFILE`, plutôt que de mettre `APP_HTTP_VERIFY_PEER=0`.
 
 ## Fonctionnement
 
