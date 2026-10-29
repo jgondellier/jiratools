@@ -52,7 +52,7 @@ final class DeliveryTableParser
                         $others[$header] = $this->text($cells[$index]);
                     }
                 }
-                $rows[] = new DeliveryRow($i + 1, $dateCell ? $this->date($dateCell) : null, $rawDate, $lines, $others);
+                $rows[] = new DeliveryRow($i + 1, $dateCell ? $this->date($dateCell) : null, $rawDate, $lines, $others, VersionExtractor::extract(implode("\n", $lines)));
             }
 
             return ['rows' => $rows, 'headers' => $headers, 'error' => null, 'tables' => $tables->length];

@@ -17,7 +17,7 @@ final class DeliveryCheck
     public array $problems = [];
 
     /**
-     * @param array<int, array{name: string, jiraDate: ?\DateTimeImmutable, confluenceDate: ?\DateTimeImmutable, inConfluence: bool}> $wsVersions
+     * @param array<int, array{name: string, jiraDate: ?\DateTimeImmutable, confluenceDate: ?\DateTimeImmutable, inConfluence: bool, ambiguous: string[]}> $wsVersions
      */
     public function __construct(
         public readonly Issue $issue,

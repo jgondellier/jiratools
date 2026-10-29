@@ -154,6 +154,7 @@ class DeliveryService
                 'jiraDate' => $v['releaseDate'],
                 'confluenceDate' => $confluenceDate,
                 'inConfluence' => [] !== $calendar->find($v['name'], $prefix),
+                'ambiguous' => $calendar->ambiguousComponents($v['name'], $prefix),
             ];
             $date = $confluenceDate ?? $v['releaseDate'];
             if ($date && (!$wsDate || $date > $wsDate)) {
@@ -173,6 +174,13 @@ class DeliveryService
             $check->add($ws->isDone() ? DeliveryCheck::WARNING : DeliveryCheck::ERROR, 'Le ticket WS n\'a pas de version : date de livraison inconnue.');
         }
         foreach ($wsVersions as $v) {
+            if ([] !== $v['ambiguous']) {
+                $check->add(DeliveryCheck::WARNING, sprintf(
+                    'Version WS « %s » présente pour plusieurs composants (%s) : indiquez le composant du projet %s dans le paramétrage des livraisons.',
+                    $v['name'], implode(', ', $v['ambiguous']), $ws->projectKey,
+                ));
+                continue;
+            }
             if (!$calendar->error && !$v['inConfluence']) {
                 $check->add(DeliveryCheck::WARNING, sprintf('Version WS « %s » absente du calendrier Confluence.', $v['name']));
             } elseif ($v['inConfluence'] && !$v['confluenceDate']) {
@@ -220,8 +228,10 @@ class DeliveryService
                 }
                 $rows = $calendar->find($v['name'], $prefix);
                 $confluenceDate = $calendar->dateOf($v['name'], $prefix);
+                $ambiguous = $calendar->ambiguousComponents($v['name'], $prefix);
                 [$level, $message] = match (true) {
                     null !== $calendar->error => ['secondary', null],
+                    [] !== $ambiguous => ['warning', 'Plusieurs composants possibles ('.implode(', ', $ambiguous).') : précisez le composant du projet'],
                     [] === $rows => ['warning', 'Absente du calendrier Confluence'],
                     null === $confluenceDate => ['warning', 'Date illisible dans Confluence'],
                     null === $v['releaseDate'] => ['warning', 'Pas de date dans Jira'],

@@ -12,10 +12,11 @@
                     <input type="hidden" name="_token" value="{{ csrf_token('deliveries') }}">
                     <div class="mb-3">
                         <label class="form-label" for="wsProjects">Projets Jira des web services</label>
-                        <textarea class="form-control" name="wsProjects" id="wsProjects" rows="3" placeholder="WSC = WS-Commande&#10;WSCLI">{{ projects_text }}</textarea>
+                        <textarea class="form-control" name="wsProjects" id="wsProjects" rows="3" placeholder="WS = WS&#10;WSREF = WS-REF">{{ projects_text }}</textarea>
                         <div class="form-text">
-                            Une clé de projet par ligne. Si les versions Jira ne portent que le numéro (ex. « 1.4.2 ») alors que le
-                            calendrier écrit « WS-Commande 1.4.2 », ajoutez <code>= WS-Commande</code> après la clé.
+                            Une clé de projet par ligne, suivie du <strong>nom du composant tel qu'écrit dans le calendrier</strong>
+                            (ex. : <code>WSREF = WS-REF</code>). Indispensable si les versions Jira ne portent que le numéro (« 1.4.2 ») :
+                            c'est lui qui distingue « 1.4.2 WS » de « 1.4.2 WS-REF ». Inutile si les versions Jira s'appellent déjà « 1.4.2 WS ».
                         </div>
                     </div>
                     <div class="mb-3">
