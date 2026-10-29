@@ -38,10 +38,10 @@ class BacklogController extends AbstractController
             'includeSprint' => $request->query->getBoolean('includeSprint'),
         ];
 
-        // Liste complète (non filtrée) pour alimenter les listes de filtres et la synthèse
+        // Liste complète (non filtrée) pour alimenter les listes de filtres et la synthèse ;
+        // les filtres sont appliqués sur cette liste, seule la recherche plein texte interroge à nouveau Jira
         $all = $backlog->getBacklog($project, ['includeSprint' => $filters['includeSprint']]);
-        $isFiltered = $filters['component'] || $filters['label'] || $filters['type'] || $filters['text'];
-        $issues = $isFiltered ? $backlog->getBacklog($project, $filters) : $all;
+        $issues = $filters['text'] ? $backlog->getBacklog($project, $filters) : $backlog->filter($all, $filters);
         $jql = $backlog->buildJql($project, $filters);
 
         return $this->render('backlog/show.html.twig', [

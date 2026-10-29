@@ -26,13 +26,14 @@ class HealthController extends AbstractController
             $pageRepository->findAll(),
             fn ($p) => null !== $p->getMaxAgeDays() && \in_array($p->getProject(), $projects, true),
         );
+        $overview = $health->getOverview($projects);
         $pagesStatus = array_values(array_filter($health->getPagesStatus($pages), fn ($s) => $s['stale'] || $s['error']));
 
         return $this->render('health/index.html.twig', [
             'projects' => $allProjects,
             'project_id' => $projectId,
-            'stuck' => $health->getStuckIssues($projects),
-            'checks' => $health->getHygieneChecks($projects),
+            'stuck' => $overview['stuck'],
+            'checks' => $overview['checks'],
             'pages' => $pagesStatus,
         ]);
     }

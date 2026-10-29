@@ -2,6 +2,7 @@
 
 namespace App\Confluence;
 
+use App\Atlassian\AtlassianException;
 use App\Atlassian\AtlassianHttp;
 use App\Jira\JiraClient;
 
@@ -34,6 +35,26 @@ class ConfluenceClient
         );
 
         return $this->mapPage($data);
+    }
+
+    /**
+     * Plusieurs pages lues en parallèle.
+     *
+     * @param string[] $pageIds
+     *
+     * @return array<string, ConfluencePageInfo|AtlassianException> identifiant => page, ou l'erreur pour cette page
+     */
+    public function getPages(array $pageIds): array
+    {
+        $requests = [];
+        foreach (array_unique($pageIds) as $id) {
+            $requests[(string) $id] = ['rest/api/content/'.rawurlencode((string) $id), ['expand' => 'version,space,history.lastUpdated'], 900];
+        }
+
+        return array_map(
+            fn (array|AtlassianException $data) => $data instanceof AtlassianException ? $data : $this->mapPage($data),
+            $this->confluenceHttp->getMany($requests),
+        );
     }
 
     private function mapPage(array $data): ConfluencePageInfo

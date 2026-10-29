@@ -26,10 +26,8 @@ class ProjectController extends AbstractController
     #[Route('/{id}', name: 'project_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(Project $project, SprintService $sprints, HealthService $health, JiraClient $jira): Response
     {
-        $reports = [];
-        foreach ($sprints->getActiveSprints($project) as $sprint) {
-            $reports[] = $sprints->getReport($project, $sprint);
-        }
+        $sprints->prefetch([$project]);
+        $reports = $sprints->getReports(array_map(fn ($sprint) => [$project, $sprint], $sprints->getActiveSprints($project)));
         $scope = ProjectScope::jql($project);
 
         return $this->render('project/show.html.twig', [

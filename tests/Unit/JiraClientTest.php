@@ -190,4 +190,33 @@ class JiraClientTest extends TestCase
         }
         self::assertFalse($client->isRankUnavailable(), 'le tri ne doit pas être désactivé pour une autre erreur');
     }
+
+    public function testServerSprintFieldIsParsed(): void
+    {
+        $client = $this->client([
+            new MockResponse(json_encode(['issues' => [self::rawIssue('APP-1', [
+                'customfield_10020' => ['com.atlassian.greenhopper.service.sprint.Sprint@1a2b[id=12,rapidViewId=42,state=ACTIVE,name=Sprint 12,startDate=2026-10-20]'],
+            ])], 'total' => 1])),
+        ], 'server');
+
+        $issue = $client->search('key = APP-1')[0];
+
+        self::assertSame(['Sprint 12'], $issue->sprints);
+        self::assertSame([12], $issue->sprintIds);
+    }
+
+    public function testSearchManyRunsSearchesTogether(): void
+    {
+        $urls = [];
+        $client = $this->client([
+            new MockResponse(json_encode(['issues' => [self::rawIssue('APP-1')], 'isLast' => true])),
+            new MockResponse(json_encode(['errorMessages' => ['JQL invalide']]), ['http_code' => 400]),
+        ], 'cloud', 'me', $urls);
+
+        $results = $client->searchMany(['ok' => ['project = APP'], 'ko' => ['foo = bar']]);
+
+        self::assertCount(1, $results['ok']);
+        self::assertInstanceOf(AtlassianException::class, $results['ko']);
+        self::assertCount(2, $urls);
+    }
 }

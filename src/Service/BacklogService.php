@@ -27,6 +27,31 @@ class BacklogService
         return $this->views->createAll($this->jira->search($jql, 1000), $project);
     }
 
+    /**
+     * Applique les filtres composant / étiquette / type à une backlog déjà chargée
+     * (évite une seconde recherche Jira ; la recherche plein texte, elle, reste faite par Jira).
+     *
+     * @param IssueView[] $views
+     *
+     * @return IssueView[]
+     */
+    public function filter(array $views, array $filters): array
+    {
+        return array_values(array_filter($views, function (IssueView $view) use ($filters) {
+            $issue = $view->issue;
+            if (!empty($filters['component']) && !\in_array(mb_strtolower($filters['component']), array_map('mb_strtolower', $issue->components), true)) {
+                return false;
+            }
+            if (!empty($filters['label'])) {
+                if ('__none__' === $filters['label'] ? [] !== $issue->labels : !\in_array($filters['label'], $issue->labels, true)) {
+                    return false;
+                }
+            }
+
+            return empty($filters['type']) || 0 === strcasecmp($filters['type'], $issue->type);
+        }));
+    }
+
     public function buildJql(Project $project, array $filters = []): string
     {
         $parts = [ProjectScope::jql($project), 'statusCategory != Done', 'issuetype not in subTaskIssueTypes()'];

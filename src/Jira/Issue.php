@@ -16,6 +16,7 @@ final class Issue
      * @param string[] $labels
      * @param string[] $fixVersions
      * @param string[] $sprints
+     * @param int[]    $sprintIds
      */
     public function __construct(
         public readonly string $key,
@@ -43,6 +44,7 @@ final class Issue
         public readonly ?\DateTimeImmutable $statusSince,
         public readonly ?string $parentKey = null,
         public readonly ?string $parentSummary = null,
+        public readonly array $sprintIds = [],
     ) {
     }
 

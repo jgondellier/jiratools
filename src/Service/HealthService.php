@@ -32,45 +32,83 @@ class HealthService
      */
     public function getStuckIssues(array $projects): array
     {
+        return $this->getOverview($projects, false)['stuck'];
+    }
+
+    /**
+     * Tickets qui traînent et contrôles d'hygiène, toutes les recherches Jira étant envoyées en parallèle.
+     *
+     * @param Project[] $projects
+     *
+     * @return array{stuck: IssueView[], checks: array<string, array{title: string, help: string, jql: string, url: string, issues: IssueView[], error: ?string}>}
+     */
+    public function getOverview(array $projects, bool $withChecks = true): array
+    {
         $scope = ProjectScope::jqlForAll($projects);
         if (!$scope) {
-            return [];
+            return ['stuck' => [], 'checks' => []];
         }
+
         $statusFilter = 'statusCategory = "In Progress"';
         $ruled = $this->evaluator->getRuledStatuses();
         if ([] !== $ruled) {
             $statusFilter = sprintf('(%s OR status in (%s))', $statusFilter, JiraClient::quoteList($ruled));
         }
-
-        try {
-            $issues = $this->jira->search("$scope AND statusCategory != Done AND $statusFilter ORDER BY updated ASC", 500, true);
-        } catch (AtlassianException $e) {
-            if (400 !== $e->getCode()) {
-                throw $e;
-            }
-            // Un statut paramétré n'existe pas dans Jira : on se limite aux statuts "En cours"
-            $issues = $this->jira->search("$scope AND statusCategory = \"In Progress\" ORDER BY updated ASC", 500, true);
+        $searches = ['_stuck' => ["$scope AND statusCategory != Done AND $statusFilter ORDER BY updated ASC", 500, true]];
+        $checks = $withChecks ? $this->hygieneChecks($projects, $scope) : [];
+        foreach ($checks as $id => [, , $jql]) {
+            $searches[$id] = [$jql, 200, false];
         }
 
-        $views = array_filter($this->views->createAll($issues), fn (IssueView $v) => $v->age->isAlert());
+        $results = $this->jira->searchMany($searches);
+
+        $stuck = $results['_stuck'];
+        if ($stuck instanceof AtlassianException) {
+            if (400 !== $stuck->getCode() || [] === $ruled) {
+                throw $stuck;
+            }
+            // Un statut paramétré n'existe pas dans Jira : on se limite aux statuts "En cours"
+            $stuck = $this->jira->search("$scope AND statusCategory = \"In Progress\" ORDER BY updated ASC", 500, true);
+        }
+        $views = array_filter($this->views->createAll($stuck), fn (IssueView $v) => $v->age->isAlert());
         usort($views, fn (IssueView $a, IssueView $b) => [StatusAge::severity($b->age->level), $b->age->days] <=> [StatusAge::severity($a->age->level), $a->age->days]);
 
-        return $views;
+        $checkResults = [];
+        foreach ($checks as $id => [$title, $help, $jql]) {
+            $issues = $results[$id];
+            $error = null;
+            if ($issues instanceof AtlassianException) {
+                if (400 !== $issues->getCode()) {
+                    throw $issues;
+                }
+                $error = $issues->getMessage();
+                $issues = [];
+            }
+            if ('sprint_no_estimate' === $id) {
+                $issues = array_values(array_filter($issues, fn ($i) => null === $i->storyPoints));
+            }
+            $checkResults[$id] = [
+                'title' => $title,
+                'help' => $help,
+                'jql' => $this->jira->effectiveJql($jql),
+                'url' => $this->jira->searchUrl($jql),
+                'issues' => $this->views->createAll($issues),
+                'error' => $error,
+            ];
+        }
+
+        return ['stuck' => array_values($views), 'checks' => $checkResults];
     }
 
     /**
-     * Contrôles d'hygiène des tickets.
+     * Définition des contrôles d'hygiène des tickets.
      *
      * @param Project[] $projects
      *
-     * @return array<string, array{title: string, help: string, jql: string, url: string, issues: IssueView[], error: ?string}>
+     * @return array<string, array{0: string, 1: string, 2: string}> identifiant => [titre, aide, JQL]
      */
-    public function getHygieneChecks(array $projects): array
+    private function hygieneChecks(array $projects, string $scope): array
     {
-        $scope = ProjectScope::jqlForAll($projects);
-        if (!$scope) {
-            return [];
-        }
         $keys = JiraClient::quoteList(ProjectScope::jiraKeys($projects));
         $done = JiraClient::quoteList(array_filter(array_map('trim', explode(',', $this->doneStatuses))) ?: ['Done']);
 
@@ -107,32 +145,7 @@ class HealthService
             ],
         ];
 
-        $result = [];
-        foreach ($checks as $id => [$title, $help, $jql]) {
-            $error = null;
-            try {
-                $issues = $this->jira->search($jql, 200);
-            } catch (AtlassianException $e) {
-                if (400 !== $e->getCode()) {
-                    throw $e;
-                }
-                $issues = [];
-                $error = $e->getMessage();
-            }
-            if ('sprint_no_estimate' === $id) {
-                $issues = array_values(array_filter($issues, fn ($i) => null === $i->storyPoints));
-            }
-            $result[$id] = [
-                'title' => $title,
-                'help' => $help,
-                'jql' => $this->jira->effectiveJql($jql),
-                'url' => $this->jira->searchUrl($jql),
-                'issues' => $this->views->createAll($issues),
-                'error' => $error,
-            ];
-        }
-
-        return $result;
+        return $checks;
     }
 
     /**
@@ -145,16 +158,16 @@ class HealthService
     public function getPagesStatus(array $pages): array
     {
         usort($pages, fn (ConfluencePage $a, ConfluencePage $b) => [$a->getCategory(), $a->getTitle()] <=> [$b->getCategory(), $b->getTitle()]);
+        $infos = $this->confluence->isConfigured()
+            ? $this->confluence->getPages(array_filter(array_map(fn (ConfluencePage $p) => $p->getPageId(), $pages)))
+            : [];
         $result = [];
         foreach ($pages as $page) {
-            $info = null;
+            $info = $infos[$page->getPageId()] ?? null;
             $error = null;
-            if ($page->getPageId() && $this->confluence->isConfigured()) {
-                try {
-                    $info = $this->confluence->getPage($page->getPageId());
-                } catch (AtlassianException $e) {
-                    $error = $e->getMessage();
-                }
+            if ($info instanceof AtlassianException) {
+                $error = $info->getMessage();
+                $info = null;
             }
             $stale = $info && $page->getMaxAgeDays() && $info->getAgeDays() > $page->getMaxAgeDays();
             $result[] = ['page' => $page, 'info' => $info, 'error' => $error, 'stale' => (bool) $stale];

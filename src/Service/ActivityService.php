@@ -14,6 +14,12 @@ use App\Repository\ProjectRepository;
  */
 class ActivityService
 {
+    /** @var IssueView[]|null tickets en cours non assignés, lus avec le travail des membres */
+    private ?array $unassigned = null;
+
+    /** @var Issue[]|null tickets des membres mis à jour récemment, lus avec le travail des membres */
+    private ?array $recent = null;
+
     public function __construct(
         private readonly JiraClient $jira,
         private readonly IssueViewFactory $views,
@@ -38,10 +44,8 @@ class ActivityService
         }
 
         $byAssignee = [];
-        if ([] !== $developers) {
-            foreach ($this->searchCurrentWork(array_map('strval', array_keys($developers))) as $issue) {
-                $byAssignee[$issue->assigneeId][] = $this->views->create($issue);
-            }
+        foreach ($this->searchCurrentWork(array_map('strval', array_keys($developers))) as $issue) {
+            $byAssignee[$issue->assigneeId][] = $this->views->create($issue);
         }
 
         $result = [];
@@ -71,6 +75,7 @@ class ActivityService
 
     /**
      * Tickets en cours (catégorie "En cours" + statuts de travail paramétrés, tous rôles) des membres.
+     * Les tickets en cours non assignés sont recherchés en parallèle (voir getUnassignedInProgress()).
      *
      * @param string[] $accountIds
      *
@@ -78,26 +83,43 @@ class ActivityService
      */
     private function searchCurrentWork(array $accountIds): array
     {
-        $assignees = sprintf('assignee in (%s)', JiraClient::quoteList($accountIds));
         $inProgress = 'statusCategory = "In Progress"';
         $statuses = $this->workStatuses->getAllStatuses();
+        $searches = [];
 
-        if ([] !== $statuses) {
-            try {
-                return $this->jira->search(
-                    sprintf('%s AND (%s OR status in (%s)) ORDER BY updated DESC', $assignees, $inProgress, JiraClient::quoteList($statuses)),
-                    300,
-                    true,
-                );
-            } catch (AtlassianException $e) {
-                if (400 !== $e->getCode()) {
-                    throw $e;
-                }
-                // Un statut paramétré n'existe plus dans Jira (renommé ?) : on se limite à la catégorie "En cours"
-            }
+        if ([] !== $accountIds) {
+            $assignees = sprintf('assignee in (%s)', JiraClient::quoteList($accountIds));
+            // Dernier ticket touché, utile pour les membres sans ticket en cours
+            $searches['recent'] = [$assignees.' AND updated >= -15d ORDER BY updated DESC', 300, false];
+            $searches['work'] = [[] !== $statuses
+                ? sprintf('%s AND (%s OR status in (%s)) ORDER BY updated DESC', $assignees, $inProgress, JiraClient::quoteList($statuses))
+                : sprintf('%s AND %s ORDER BY updated DESC', $assignees, $inProgress), 300, true];
+        }
+        if ($scope = ProjectScope::jqlForAll($this->projectRepository->findBy(['active' => true]))) {
+            $searches['unassigned'] = [$scope.' AND statusCategory = "In Progress" AND assignee is EMPTY ORDER BY updated DESC', 100, true];
         }
 
-        return $this->jira->search(sprintf('%s AND %s ORDER BY updated DESC', $assignees, $inProgress), 300, true);
+        $results = $this->jira->searchMany($searches);
+
+        $unassigned = $results['unassigned'] ?? [];
+        if ($unassigned instanceof AtlassianException) {
+            throw $unassigned;
+        }
+        $this->unassigned = $this->views->createAll($unassigned);
+
+        $recent = $results['recent'] ?? [];
+        $this->recent = $recent instanceof AtlassianException ? null : $recent;
+
+        $work = $results['work'] ?? [];
+        if ($work instanceof AtlassianException) {
+            if (400 !== $work->getCode() || [] === $statuses) {
+                throw $work;
+            }
+            // Un statut paramétré n'existe plus dans Jira (renommé ?) : on se limite à la catégorie "En cours"
+            $work = $this->jira->search(sprintf('assignee in (%s) AND %s ORDER BY updated DESC', JiraClient::quoteList($accountIds), $inProgress), 300, true);
+        }
+
+        return $work;
     }
 
     /**
@@ -107,16 +129,11 @@ class ActivityService
      */
     public function getUnassignedInProgress(): array
     {
-        $scope = ProjectScope::jqlForAll($this->projectRepository->findBy(['active' => true]));
-        if (!$scope) {
-            return [];
+        if (null === $this->unassigned) {
+            $this->searchCurrentWork([]);
         }
 
-        return $this->views->createAll($this->jira->search(
-            $scope.' AND statusCategory = "In Progress" AND assignee is EMPTY ORDER BY updated DESC',
-            100,
-            true,
-        ));
+        return $this->unassigned;
     }
 
     /**
@@ -129,8 +146,10 @@ class ActivityService
         if ([] === $idle) {
             return;
         }
-        $ids = JiraClient::quoteList(array_map('strval', array_keys($idle)));
-        $issues = $this->jira->search(sprintf('assignee in (%s) AND updated >= -15d ORDER BY updated DESC', $ids), 200);
+        $issues = $this->recent ?? $this->jira->search(
+            sprintf('assignee in (%s) AND updated >= -15d ORDER BY updated DESC', JiraClient::quoteList(array_map('strval', array_keys($idle)))),
+            200,
+        );
 
         /** @var array<string, Issue> $last */
         $last = [];

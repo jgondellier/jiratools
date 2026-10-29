@@ -95,6 +95,13 @@ Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectiv
 - L'**entrée dans le statut** est calculée à partir de l'historique du ticket (dernier changement de statut).
 - La **vélocité** compte les tickets terminés avant la clôture de chaque sprint.
 
+### Appels à Jira et Confluence
+
+- Les recherches indépendantes d'une page sont **envoyées en parallèle** (jusqu'à 10 connexions simultanées) : une page coûte le temps de 1 à 3 allers-retours vers Jira, quel que soit le nombre de contrôles.
+- Les réponses sont gardées en cache `APP_CACHE_TTL` secondes (60 par défaut) ; les sprints futurs 10 min, les sprints clôturés 1 h, les statuts Jira 1 h, les pages Confluence 15 min. Le bouton ⟳ (ou `?refresh=1`) force la relecture.
+- L'historique des tickets (volumineux) n'est demandé que là où il sert : tickets en cours et tickets non terminés des sprints.
+- Seuls les champs utiles sont demandés ; la backlog n'est lue qu'une fois (les filtres sont appliqués par l'application, sauf la recherche plein texte) ; la vélocité des 6 derniers sprints tient en une seule recherche.
+
 ## Développement
 
 ```bash

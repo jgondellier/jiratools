@@ -19,6 +19,8 @@ framework:
 
     # Options de connexion HTTP communes aux appels Jira et Confluence (voir .env)
     http_client:
+        # Requêtes Jira envoyées en parallèle (jusqu'à 10 connexions simultanées par serveur)
+        max_host_connections: 10
         default_options:
             verify_peer: '%env(bool:APP_HTTP_VERIFY_PEER)%'
             verify_host: '%env(bool:APP_HTTP_VERIFY_HOST)%'

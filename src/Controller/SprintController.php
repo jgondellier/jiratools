@@ -19,17 +19,23 @@ class SprintController extends AbstractController
     #[Route('', name: 'sprint_index', methods: ['GET'])]
     public function index(ProjectRepository $projects, SprintService $sprints): Response
     {
-        $rows = [];
-        foreach ($projects->findBy(['active' => true], ['name' => 'ASC']) as $project) {
-            $reports = [];
+        $active = $projects->findBy(['active' => true], ['name' => 'ASC']);
+        $sprints->prefetch($active);
+
+        $items = [];
+        foreach ($active as $p => $project) {
             foreach ($sprints->getActiveSprints($project) as $sprint) {
-                $reports[] = $sprints->getReport($project, $sprint);
+                $items[] = [$project, $sprint, $p];
             }
-            $rows[] = [
-                'project' => $project,
-                'reports' => $reports,
-                'next' => $sprints->getNextSprint($project),
-            ];
+        }
+        $reports = $sprints->getReports(array_map(fn ($item) => [$item[0], $item[1]], $items));
+
+        $rows = [];
+        foreach ($active as $p => $project) {
+            $rows[$p] = ['project' => $project, 'reports' => [], 'next' => $sprints->getNextSprint($project)];
+        }
+        foreach ($items as $i => $item) {
+            $rows[$item[2]]['reports'][] = $reports[$i];
         }
 
         return $this->render('sprint/index.html.twig', ['rows' => $rows]);
@@ -38,6 +44,7 @@ class SprintController extends AbstractController
     #[Route('/{id}', name: 'sprint_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(Request $request, Project $project, SprintService $sprints): Response
     {
+        $sprints->prefetch([$project], ['active', 'closed']);
         $available = $sprints->getSelectableSprints($project);
         $sprintId = (int) $request->query->get('sprint');
         $sprint = null;
@@ -51,8 +58,7 @@ class SprintController extends AbstractController
         return $this->render('sprint/show.html.twig', [
             'project' => $project,
             'sprints' => $available,
-            'report' => $sprint ? $sprints->getReport($project, $sprint) : null,
-            'velocity' => $sprints->getVelocity($project),
+            ...$sprints->getSprintOverview($project, $sprint),
         ]);
     }
 }

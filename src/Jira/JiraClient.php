@@ -119,34 +119,116 @@ class JiraClient
     /**
      * Recherche JQL paginée.
      *
+     * @return Issue[]
+     *
+     * @throws AtlassianException
+     */
+    public function search(string $jql, int $max = 500, bool $withChangelog = false): array
+    {
+        $result = $this->searchMany(['_' => [$jql, $max, $withChangelog]])['_'];
+        if ($result instanceof AtlassianException) {
+            throw $result;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Plusieurs recherches JQL envoyées en parallèle (y compris les pages suivantes).
+     *
      * Les JQL triées par "ORDER BY Rank" utilisent le champ JIRA_RANK_FIELD ; si Jira refuse ce tri
      * (champ Rank absent, ambigu ou non triable), la recherche est relancée avec un tri de remplacement.
      *
-     * @return Issue[]
+     * @param array<string, array{0: string, 1?: int, 2?: bool}> $searches clé => [jql, nombre max, avec historique]
+     *
+     * @return array<string, Issue[]|AtlassianException> clé => tickets, ou l'erreur de cette recherche
      */
-    public function search(string $jql, int $max = 500, bool $withChangelog = false, array $extraFields = []): array
+    public function searchMany(array $searches): array
     {
-        if (!preg_match(self::RANK_ORDER_PATTERN, $jql)) {
-            return $this->doSearch($jql, $max, $withChangelog, $extraFields);
+        $fields = implode(',', array_values(array_unique(array_filter(array_merge(
+            self::BASE_FIELDS,
+            [$this->storyPointsField, $this->sprintField, $this->flaggedField],
+        )))));
+
+        $states = [];
+        foreach ($searches as $key => $search) {
+            [$jql, $max, $changelog] = $search + [1 => 500, 2 => false];
+            $states[$key] = [
+                'jql' => $this->effectiveJql($jql),
+                // Le tri de remplacement n'est tenté que si le tri par rang a été demandé et pas encore refusé
+                'canFallback' => preg_match(self::RANK_ORDER_PATTERN, $jql) && !$this->isRankUnavailable(),
+                'original' => $jql,
+                'max' => $max,
+                'changelog' => $changelog,
+                // L'historique est volumineux : pages de 100 ; sinon pages plus grandes sur Jira Server
+                'pageSize' => min($max, $changelog || $this->isCloud() ? 100 : 500),
+                'raw' => [],
+                'token' => null,
+                'startAt' => 0,
+                'done' => false,
+            ];
         }
 
-        if (!$this->isRankUnavailable()) {
-            try {
-                return $this->doSearch($this->applyRankOrder($jql, false), $max, $withChangelog, $extraFields);
-            } catch (AtlassianException $e) {
-                if (400 !== $e->getCode()) {
-                    throw $e;
+        $results = [];
+        while ($active = array_filter($states, fn (array $st) => !$st['done'])) {
+            $requests = [];
+            foreach ($active as $key => $st) {
+                $query = ['jql' => $st['jql'], 'maxResults' => $st['pageSize'], 'fields' => $fields];
+                if ($st['changelog']) {
+                    $query['expand'] = 'changelog';
                 }
-                // Vérifie que c'est bien le tri qui pose problème avant de le désactiver
-                $this->logger?->warning('Tri par rang refusé par Jira ({msg}), tri de remplacement : {fallback}', ['msg' => $e->getMessage(), 'fallback' => self::FALLBACK_ORDER]);
-                $issues = $this->doSearch($this->applyRankOrder($jql, true), $max, $withChangelog, $extraFields);
-                $this->markRankUnavailable();
-
-                return $issues;
+                if ($this->isCloud()) {
+                    // Jira Cloud : endpoint /search/jql paginé par jeton
+                    if ($st['token']) {
+                        $query['nextPageToken'] = $st['token'];
+                    }
+                    $requests[$key] = ['rest/api/2/search/jql', $query];
+                } else {
+                    $query['startAt'] = $st['startAt'];
+                    $requests[$key] = ['rest/api/2/search', $query];
+                }
             }
+
+            foreach ($this->jiraHttp->getMany($requests) as $key => $data) {
+                $st = &$states[$key];
+                if ($data instanceof AtlassianException) {
+                    if (400 === $data->getCode() && $st['canFallback'] && [] === $st['raw']) {
+                        $this->logger?->warning('Tri par rang refusé par Jira ({msg}), tri de remplacement : {fallback}', ['msg' => $data->getMessage(), 'fallback' => self::FALLBACK_ORDER]);
+                        $st['jql'] = $this->applyRankOrder($st['original'], true);
+                        $st['canFallback'] = false;
+                        $st['fallbackInUse'] = true;
+                        continue;
+                    }
+                    $results[$key] = $data;
+                    $st['done'] = true;
+                    continue;
+                }
+
+                if (!empty($st['fallbackInUse'])) {
+                    // Le tri de remplacement fonctionne : c'est donc bien le tri par rang qui était refusé
+                    $this->markRankUnavailable();
+                    $st['fallbackInUse'] = false;
+                }
+
+                $issues = $data['issues'] ?? [];
+                $st['raw'] = array_merge($st['raw'], $issues);
+                if ($this->isCloud()) {
+                    $st['token'] = $data['nextPageToken'] ?? null;
+                    $more = $st['token'] && !($data['isLast'] ?? false);
+                } else {
+                    $st['startAt'] += \count($issues);
+                    $more = [] !== $issues && $st['startAt'] < (int) ($data['total'] ?? 0);
+                }
+                $st['done'] = !$more || \count($st['raw']) >= $st['max'];
+            }
+            unset($st);
         }
 
-        return $this->doSearch($this->applyRankOrder($jql, true), $max, $withChangelog, $extraFields);
+        foreach ($states as $key => $st) {
+            $results[$key] ??= array_map(fn (array $i) => $this->mapIssue($i), \array_slice($st['raw'], 0, $st['max']));
+        }
+
+        return array_replace($searches, $results);
     }
 
     /**
@@ -157,88 +239,70 @@ class JiraClient
         return preg_match(self::RANK_ORDER_PATTERN, $jql) ? $this->applyRankOrder($jql, $this->isRankUnavailable()) : $jql;
     }
 
-    /** @return Issue[] */
-    private function doSearch(string $jql, int $max, bool $withChangelog, array $extraFields): array
-    {
-        $fields = array_values(array_unique(array_filter(array_merge(
-            self::BASE_FIELDS,
-            [$this->storyPointsField, $this->sprintField, $this->flaggedField],
-            $extraFields,
-        ))));
-
-        $raw = [];
-        $pageSize = min(100, $max);
-
-        if ($this->isCloud()) {
-            // Jira Cloud : nouvel endpoint /search/jql paginé par jeton
-            $token = null;
-            do {
-                $query = ['jql' => $jql, 'maxResults' => $pageSize, 'fields' => implode(',', $fields)];
-                if ($withChangelog) {
-                    $query['expand'] = 'changelog';
-                }
-                if ($token) {
-                    $query['nextPageToken'] = $token;
-                }
-                $data = $this->jiraHttp->get('rest/api/2/search/jql', $query);
-                $raw = array_merge($raw, $data['issues'] ?? []);
-                $token = $data['nextPageToken'] ?? null;
-            } while ($token && \count($raw) < $max && !($data['isLast'] ?? false));
-        } else {
-            $startAt = 0;
-            do {
-                $query = ['jql' => $jql, 'startAt' => $startAt, 'maxResults' => $pageSize, 'fields' => implode(',', $fields)];
-                if ($withChangelog) {
-                    $query['expand'] = 'changelog';
-                }
-                $data = $this->jiraHttp->get('rest/api/2/search', $query);
-                $issues = $data['issues'] ?? [];
-                $raw = array_merge($raw, $issues);
-                $startAt += \count($issues);
-                $total = (int) ($data['total'] ?? 0);
-            } while ([] !== $issues && $startAt < $total && \count($raw) < $max);
-        }
-
-        return array_map(fn (array $i) => $this->mapIssue($i), \array_slice($raw, 0, $max));
-    }
-
     /**
-     * Nombre de tickets correspondant à une JQL (limité à $max).
-     */
-    public function count(string $jql, int $max = 1000): int
-    {
-        return \count($this->search($jql, $max));
-    }
-
-    public function getBoard(int $boardId): array
-    {
-        return $this->jiraHttp->get(sprintf('rest/agile/1.0/board/%d', $boardId), [], 3600);
-    }
-
-    /**
-     * @param string $state active, future, closed (ou plusieurs séparés par des virgules)
+     * @param string $state active, future ou closed
      *
      * @return Sprint[]
      */
     public function getSprints(int $boardId, string $state = 'active'): array
     {
-        $sprints = [];
-        $startAt = 0;
-        do {
-            $data = $this->jiraHttp->get(sprintf('rest/agile/1.0/board/%d/sprint', $boardId), [
-                'state' => $state,
-                'startAt' => $startAt,
-                'maxResults' => 50,
-            ]);
-            $values = $data['values'] ?? [];
-            foreach ($values as $value) {
-                // Un board peut afficher des sprints d'autres boards : on garde ceux d'origine en priorité
-                $sprints[] = Sprint::fromArray($value);
-            }
-            $startAt += \count($values);
-        } while ([] !== $values && !($data['isLast'] ?? true) && $startAt < 2000);
+        return $this->getSprintsMany([$boardId], [$state])[$state][$boardId];
+    }
 
-        return $sprints;
+    /**
+     * Sprints de plusieurs boards et états, lus en parallèle. Les sprints clôturés et futurs changent
+     * rarement : ils sont gardés en cache plus longtemps que les données des tickets.
+     *
+     * @param int[]    $boardIds
+     * @param string[] $states   active, future, closed
+     *
+     * @return array<string, array<int, Sprint[]>> état => identifiant du board => sprints
+     */
+    public function getSprintsMany(array $boardIds, array $states = ['active']): array
+    {
+        $boardIds = array_values(array_unique(array_map('intval', $boardIds)));
+        $result = [];
+        $pending = [];
+        foreach ($states as $state) {
+            $result[$state] = array_fill_keys($boardIds, []);
+            foreach ($boardIds as $boardId) {
+                $pending[$state.'|'.$boardId] = 0; // startAt
+            }
+        }
+
+        while ([] !== $pending) {
+            $requests = [];
+            foreach ($pending as $key => $startAt) {
+                [$state, $boardId] = explode('|', $key);
+                $requests[$key] = [sprintf('rest/agile/1.0/board/%d/sprint', $boardId), [
+                    'state' => $state,
+                    'startAt' => $startAt,
+                    'maxResults' => 50,
+                ], match ($state) {
+                    'closed' => 3600,
+                    'future' => 600,
+                    default => null,
+                }];
+            }
+            $next = [];
+            foreach ($this->jiraHttp->getMany($requests) as $key => $data) {
+                if ($data instanceof AtlassianException) {
+                    throw $data;
+                }
+                [$state, $boardId] = explode('|', $key);
+                $values = $data['values'] ?? [];
+                foreach ($values as $value) {
+                    $result[$state][(int) $boardId][] = Sprint::fromArray($value);
+                }
+                $startAt = $pending[$key] + \count($values);
+                if ([] !== $values && !($data['isLast'] ?? true) && $startAt < 2000) {
+                    $next[$key] = $startAt;
+                }
+            }
+            $pending = $next;
+        }
+
+        return $result;
     }
 
     /**
@@ -317,11 +381,15 @@ class JiraClient
         $status = $f['status'] ?? [];
 
         $sprints = [];
+        $sprintIds = [];
         foreach ((array) ($f[$this->sprintField] ?? []) as $sprint) {
             if (\is_array($sprint) && isset($sprint['name'])) {
                 $sprints[] = (string) $sprint['name'];
+                $sprintIds[] = (int) ($sprint['id'] ?? 0);
             } elseif (\is_string($sprint) && preg_match('/name=([^,\]]+)/', $sprint, $m)) {
-                $sprints[] = $m[1]; // format texte de Jira Server
+                // Format texte de Jira Server : com.atlassian.greenhopper...Sprint@1a2b[id=12,...,name=Sprint 12,...]
+                $sprints[] = $m[1];
+                $sprintIds[] = preg_match('/\bid=(\d+)/', $sprint, $id) ? (int) $id[1] : 0;
             }
         }
 
@@ -345,6 +413,7 @@ class JiraClient
             labels: array_map('strval', (array) ($f['labels'] ?? [])),
             fixVersions: array_map(fn ($v) => (string) $v['name'], (array) ($f['fixVersions'] ?? [])),
             sprints: $sprints,
+            sprintIds: array_values(array_filter($sprintIds)),
             storyPoints: is_numeric($points) ? (float) $points : null,
             flagged: !empty($f[$this->flaggedField]),
             created: self::date($f['created'] ?? null),
