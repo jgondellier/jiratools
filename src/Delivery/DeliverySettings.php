@@ -14,10 +14,13 @@ class DeliverySettings
     private const DEFAULTS = [
         'wsProjects' => [],          // [{key: "WSC", prefix: "WS-Commande"}]
         'wsLabels' => [],            // étiquettes qui identifient mes tickets WS dans ces projets
+        'myComponents' => [],        // [{key: "APP", prefix: "PORTAIL"}] nom de mes projets dans le calendrier
         'pageId' => null,            // page Confluence du calendrier des livraisons
         'dateColumn' => 'Date',
         'versionColumn' => 'Version',
         'marginDays' => 0,           // la livraison WS doit précéder ma version d'au moins N jours
+        'horizonDays' => 45,         // prochaines livraisons : versions livrées dans les N jours (calendaires)
+        'startDays' => 5,            // un ticket non commencé à moins de N jours ouvrés de la livraison est en alerte
     ];
 
     private ?array $values = null;
@@ -35,6 +38,8 @@ class DeliverySettings
     {
         $clean = array_replace(self::DEFAULTS, array_intersect_key($values, self::DEFAULTS));
         $clean['marginDays'] = max(0, (int) $clean['marginDays']);
+        $clean['horizonDays'] = max(1, (int) $clean['horizonDays']);
+        $clean['startDays'] = max(0, (int) $clean['startDays']);
         $clean['pageId'] = self::extractPageId((string) $clean['pageId']);
         $clean['wsLabels'] = self::parseLabels(\is_array($clean['wsLabels']) ? implode(',', $clean['wsLabels']) : (string) $clean['wsLabels']);
         $this->settings->setValue(self::SETTING, $clean);
@@ -84,9 +89,15 @@ class DeliverySettings
         return array_values(array_unique($labels));
     }
 
+    /** @return array<int, array{key: string, prefix: ?string}> */
+    public function getMyComponents(): array
+    {
+        return (array) $this->all()['myComponents'];
+    }
+
     public function getPrefix(string $projectKey): ?string
     {
-        foreach ($this->getWsProjects() as $project) {
+        foreach (array_merge($this->getWsProjects(), $this->getMyComponents()) as $project) {
             if ($project['key'] === $projectKey) {
                 return $project['prefix'] ?: null;
             }
@@ -108,6 +119,16 @@ class DeliverySettings
     public function getVersionColumn(): string
     {
         return (string) $this->all()['versionColumn'] ?: 'Version';
+    }
+
+    public function getHorizonDays(): int
+    {
+        return (int) $this->all()['horizonDays'];
+    }
+
+    public function getStartDays(): int
+    {
+        return (int) $this->all()['startDays'];
     }
 
     public function getMarginDays(): int

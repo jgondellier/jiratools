@@ -60,6 +60,7 @@ class DeliveryTableParserTest extends TestCase
         self::assertSame('2026-11-05', $calendar->dateOf('3.1', 'WS-Stock')?->format('Y-m-d'), '"v" devant le numéro ignoré');
         self::assertNull($calendar->dateOf('1.4', 'WS-Commande'), '1.4 ne correspond pas à 1.4.2');
         self::assertNull($calendar->dateOf('2.0.0', 'WS-Commande'), 'numéro d\'un autre composant');
+        self::assertNull($calendar->dateOf('1.4.2'), 'numéro seul : pas rapproché de « WS-Commande 1.4.2 »');
         self::assertCount(1, $calendar->find('WS-Client 2.1.0'));
         self::assertNull($calendar->dateOf('WS-Client 2.1.0'), 'ligne trouvée mais date illisible');
     }
@@ -83,10 +84,20 @@ class DeliveryTableParserTest extends TestCase
         self::assertNull($calendar->dateOf('2.0.1', 'WS'), '« 2.0.1 WS » n\'est pas « 2.0.1 WS-REF »');
         self::assertSame('2026-11-18', $calendar->dateOf('1.4.3', 'ws')?->format('Y-m-d'), 'casse du composant ignorée');
 
-        // Numéro seul, sans composant paramétré : ambigu entre WS et WS-REF
+        // Numéro seul, sans composant paramétré : jamais rapproché d'une ligne avec composant
         self::assertNull($calendar->dateOf('1.4.2'));
-        self::assertSame(['WS', 'WS-REF'], $calendar->ambiguousComponents('1.4.2'));
-        self::assertSame([], $calendar->ambiguousComponents('1.4.3'));
-        self::assertSame('2026-11-18', $calendar->dateOf('1.4.3')?->format('Y-m-d'), 'numéro présent pour un seul composant');
+        self::assertNull($calendar->dateOf('1.4.3'), '« 1.4.3 » d\'un autre projet ≠ « 1.4.3 WS »');
+        self::assertSame(['WS', 'WS-REF'], $calendar->componentsForNumber('1.4.2'), 'composants proposés pour le paramétrage');
+        self::assertSame(['WS'], $calendar->componentsForNumber('1.4.3'));
+        self::assertSame([], $calendar->componentsForNumber('1.4.2', 'WS'), 'composant connu : pas de suggestion');
+    }
+
+    public function testCellWithoutComponentMatchesAnyComponent(): void
+    {
+        $page = '<table><tr><th>Date</th><th>Version</th></tr><tr><td>05/11/2026</td><td>1.6.0</td></tr></table>';
+        $calendar = new DeliveryCalendar((new DeliveryTableParser())->parse($page)['rows']);
+
+        self::assertSame('2026-11-05', $calendar->dateOf('1.6.0')?->format('Y-m-d'));
+        self::assertSame('2026-11-05', $calendar->dateOf('1.6.0', 'WS')?->format('Y-m-d'));
     }
 }

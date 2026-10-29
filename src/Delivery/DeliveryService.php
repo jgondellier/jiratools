@@ -58,9 +58,9 @@ class DeliveryService
      *     myVersionsWithoutDate: string[]
      * }
      */
-    public function getReport(array $projects): array
+    public function getReport(array $projects, ?DeliveryCalendar $calendar = null): array
     {
-        $calendar = $this->getCalendar();
+        $calendar ??= $this->getCalendar();
         $wsKeys = $this->settings->getWsKeys();
         $scope = ProjectScope::jqlForAll($projects);
         $myKeys = ProjectScope::jiraKeys($projects);
@@ -159,7 +159,7 @@ class DeliveryService
                 'jiraDate' => $v['releaseDate'],
                 'confluenceDate' => $confluenceDate,
                 'inConfluence' => [] !== $calendar->find($v['name'], $prefix),
-                'ambiguous' => $calendar->ambiguousComponents($v['name'], $prefix),
+                'otherComponents' => $calendar->componentsForNumber($v['name'], $prefix),
             ];
             $date = $confluenceDate ?? $v['releaseDate'];
             if ($date && (!$wsDate || $date > $wsDate)) {
@@ -183,15 +183,9 @@ class DeliveryService
             $check->add($ws->isDone() ? DeliveryCheck::WARNING : DeliveryCheck::ERROR, 'Le ticket WS n\'a pas de version : date de livraison inconnue.');
         }
         foreach ($wsVersions as $v) {
-            if ([] !== $v['ambiguous']) {
-                $check->add(DeliveryCheck::WARNING, sprintf(
-                    'Version WS « %s » présente pour plusieurs composants (%s) : indiquez le composant du projet %s dans le paramétrage des livraisons.',
-                    $v['name'], implode(', ', $v['ambiguous']), $ws->projectKey,
-                ));
-                continue;
-            }
             if (!$calendar->error && !$v['inConfluence']) {
-                $check->add(DeliveryCheck::WARNING, sprintf('Version WS « %s » absente du calendrier Confluence.', $v['name']));
+                $check->add(DeliveryCheck::WARNING, sprintf('Version WS « %s » absente du calendrier Confluence.', $v['name'])
+                    .self::componentsHint($v['otherComponents'], $ws->projectKey));
             } elseif ($v['inConfluence'] && !$v['confluenceDate']) {
                 $check->add(DeliveryCheck::WARNING, sprintf('Version WS « %s » sans date lisible dans le calendrier Confluence.', $v['name']));
             }
@@ -248,11 +242,9 @@ class DeliveryService
             $prefix = $this->settings->getPrefix($v['projectKey']);
             $rows = $calendar->find($v['name'], $prefix);
             $confluenceDate = $calendar->dateOf($v['name'], $prefix);
-            $ambiguous = $calendar->ambiguousComponents($v['name'], $prefix);
             [$level, $message] = match (true) {
                 null !== $calendar->error => ['secondary', null],
-                [] !== $ambiguous => ['warning', 'Plusieurs composants possibles ('.implode(', ', $ambiguous).') : précisez le composant du projet'],
-                [] === $rows => ['warning', 'Absente du calendrier Confluence'],
+                [] === $rows => ['warning', 'Absente du calendrier Confluence'.self::componentsHint($calendar->componentsForNumber($v['name'], $prefix), $v['projectKey'])],
                 null === $confluenceDate => ['warning', 'Date illisible dans Confluence'],
                 null === $v['releaseDate'] => ['warning', 'Pas de date dans Jira'],
                 $v['releaseDate'] != $confluenceDate => ['danger', 'Dates différentes'],
@@ -333,5 +325,14 @@ class DeliveryService
         }
 
         return $issues;
+    }
+
+    /** « (trouvée pour WS, WS-REF : indiquez le composant du projet WSC dans le paramétrage) » */
+    public static function componentsHint(array $components, string $projectKey): string
+    {
+        return [] === $components ? '' : sprintf(
+            ' (numéro trouvé pour %s : indiquez le composant du projet %s dans le paramétrage des livraisons)',
+            implode(', ', $components), $projectKey,
+        );
     }
 }

@@ -106,6 +106,11 @@ class JiraClient
         return sprintf('%s/secure/RapidBoard.jspa?rapidView=%d', $this->jiraHttp->getBaseUrl(), $boardId);
     }
 
+    public function versionUrl(string $projectKey, string $versionId): string
+    {
+        return sprintf('%s/projects/%s/versions/%s', $this->jiraHttp->getBaseUrl(), rawurlencode($projectKey), rawurlencode($versionId));
+    }
+
     public function searchUrl(string $jql): string
     {
         return $this->jiraHttp->getBaseUrl().'/issues/?jql='.rawurlencode($this->effectiveJql($jql));

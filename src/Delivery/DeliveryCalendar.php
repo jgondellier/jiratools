@@ -24,7 +24,8 @@ final class DeliveryCalendar
      *
      * La version Jira est décomposée en numéro + composant (« 1.4.2 WS », « WS-REF 2.0.1 ») ; si elle ne porte
      * que le numéro (« 1.4.2 »), le composant paramétré pour son projet est utilisé. Le numéro doit être
-     * identique (« 1.4 » ≠ « 1.4.2 ») et le composant aussi (« WS » ≠ « WS-REF »), sans tenir compte de la casse.
+     * identique (« 1.4 » ≠ « 1.4.2 ») et le composant aussi (« WS » ≠ « WS-REF », « 1.4.2 » ≠ « 1.4.2 WS »),
+     * sans tenir compte de la casse.
      *
      * @return DeliveryRow[]
      */
@@ -56,11 +57,12 @@ final class DeliveryCalendar
     }
 
     /**
-     * Composants différents trouvés pour une version donnée sans composant (« 1.4.2 » présent pour WS et WS-REF).
+     * Pour une version sans composant (« 1.4.2 ») non trouvée telle quelle : composants pour lesquels
+     * ce numéro figure dans le calendrier (« 1.4.2 WS », « 1.4.2 WS-REF »), afin d'aider au paramétrage.
      *
      * @return string[]
      */
-    public function ambiguousComponents(string $versionName, ?string $component = null): array
+    public function componentsForNumber(string $versionName, ?string $component = null): array
     {
         $wanted = self::wanted($versionName, $component);
         if (null === $wanted || null !== $wanted['component']) {
@@ -69,13 +71,13 @@ final class DeliveryCalendar
         $components = [];
         foreach ($this->rows as $row) {
             foreach ($row->entries as $entry) {
-                if (self::matches($entry, $wanted) && null !== $entry['component']) {
+                if ($entry['version'] === $wanted['version'] && null !== $entry['component']) {
                     $components[VersionExtractor::foldComponent($entry['component'])] = $entry['component'];
                 }
             }
         }
 
-        return \count($components) > 1 ? array_values($components) : [];
+        return array_values($components);
     }
 
     /** @return array{version: string, component: ?string}|null */
@@ -91,11 +93,21 @@ final class DeliveryCalendar
         return $wanted;
     }
 
+    /**
+     * Même numéro et même composant. Un numéro seul ne correspond qu'à une ligne sans composant
+     * (« 1.5.0 » de mon projet ≠ « 1.5.0 WS ») ; une ligne sans composant correspond à tout composant.
+     */
     private static function matches(array $entry, array $wanted): bool
     {
-        return $entry['version'] === $wanted['version']
-            && (null === $wanted['component'] || null === $entry['component']
-                || VersionExtractor::foldComponent($entry['component']) === VersionExtractor::foldComponent($wanted['component']));
+        if ($entry['version'] !== $wanted['version']) {
+            return false;
+        }
+        if (null === $entry['component']) {
+            return true;
+        }
+
+        return null !== $wanted['component']
+            && VersionExtractor::foldComponent($entry['component']) === VersionExtractor::foldComponent($wanted['component']);
     }
 
     /**
@@ -150,9 +162,6 @@ final class DeliveryCalendar
     /** Date de livraison d'une version (première ligne datée qui la cite) */
     public function dateOf(string $versionName, ?string $component = null): ?\DateTimeImmutable
     {
-        if ([] !== $this->ambiguousComponents($versionName, $component)) {
-            return null; // plusieurs composants possibles : pas de date choisie au hasard
-        }
         foreach ($this->find($versionName, $component) as $row) {
             if ($row->date) {
                 return $row->date;

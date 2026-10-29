@@ -11,7 +11,7 @@
 {% block body %}
     {% set calendar = report.calendar %}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Livraisons des web services</h1>
+        <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Livraisons</h1>
         <form class="d-flex flex-wrap gap-2 align-items-center" method="get">
             <select name="project" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Tous mes projets</option>
@@ -27,23 +27,23 @@
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md">
-            <div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-x-octagon"></i> Livraisons WS en retard ou bloquantes</div><div class="display-6">{{ counts.error }}</div>
-            </div></div>
-        </div>
-        <div class="col-6 col-md">
-            <div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
-            </div></div>
-        </div>
-        <div class="col-6 col-md">
             <div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small text-success"><i class="bi bi-check-circle"></i> Cohérents</div><div class="display-6">{{ counts.ok }}</div>
+                <div class="small"><i class="bi bi-box-seam"></i> Versions à livrer ({{ settings.horizonDays }} j)</div><div class="display-6">{{ release_stats.count }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
-            <div class="card stat-card h-100 {{ version_problems ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-calendar-x"></i> Versions WS à vérifier (Jira / Confluence)</div><div class="display-6">{{ version_problems }}</div>
+            <div class="card stat-card h-100 {{ release_stats.atRisk ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-x-octagon"></i> Versions à risque</div><div class="display-6">{{ release_stats.atRisk }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ release_stats.issuesInError ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-hourglass-bottom"></i> Tickets à risque</div><div class="display-6">{{ release_stats.issuesInError }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-diagram-3"></i> Dépendances WS en retard</div><div class="display-6">{{ counts.error }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
@@ -58,6 +58,11 @@
             Les dates Jira des versions WS sont utilisées à la place. <a href="{{ path('admin_deliveries') }}">Paramétrage</a></div>
     {% endif %}
 
+    <h2 class="h5 mb-3"><i class="bi bi-box-seam"></i> Prochaines livraisons
+        <small class="text-muted fw-normal">— mon projet et projets web services, date Confluence (sinon Jira)</small></h2>
+    {{ include('delivery/_releases.html.twig') }}
+
+    <h2 class="h5 mb-3"><i class="bi bi-diagram-3"></i> Dépendances et cohérence</h2>
     {# --- Corrélation par version ------------------------------------------------ #}
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">

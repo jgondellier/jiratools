@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Delivery\DeliveryCheck;
 use App\Delivery\DeliveryService;
 use App\Delivery\DeliverySettings;
+use App\Delivery\ReleaseReadiness;
+use App\Delivery\ReleaseReadinessService;
 use App\Jira\JiraClient;
 use App\Repository\ProjectRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,7 +20,14 @@ use Symfony\Component\Routing\Attribute\Route;
 class DeliveryController extends AbstractController
 {
     #[Route('/livraisons', name: 'delivery', methods: ['GET'])]
-    public function index(Request $request, DeliverySettings $settings, DeliveryService $deliveries, ProjectRepository $projectRepository, JiraClient $jira): Response
+    public function index(
+        Request $request,
+        DeliverySettings $settings,
+        DeliveryService $deliveries,
+        ReleaseReadinessService $readiness,
+        ProjectRepository $projectRepository,
+        JiraClient $jira,
+    ): Response
     {
         if (!$settings->isConfigured()) {
             $this->addFlash('info', 'Indiquez d\'abord les projets Jira des web services et la page Confluence du calendrier des livraisons.');
@@ -31,7 +40,9 @@ class DeliveryController extends AbstractController
         $projects = $projectId ? array_values(array_filter($allProjects, fn ($p) => $p->getId() === $projectId)) : $allProjects;
         $onlyProblems = $request->query->getBoolean('problems');
 
-        $report = $deliveries->getReport($projects);
+        $calendar = $deliveries->getCalendar();
+        $releases = $readiness->getUpcoming($projects, $calendar);
+        $report = $deliveries->getReport($projects, $calendar);
 
         $counts = [DeliveryCheck::ERROR => 0, DeliveryCheck::WARNING => 0, DeliveryCheck::OK => 0];
         foreach ($report['checks'] as $check) {
@@ -54,6 +65,12 @@ class DeliveryController extends AbstractController
             'counts' => $counts,
             'settings' => $settings,
             'jira_browse' => rtrim($jira->browseUrl('X'), 'X'),
+            'releases' => $onlyProblems ? array_values(array_filter($releases, fn (ReleaseReadiness $r) => ReleaseReadiness::OK !== $r->getLevel())) : $releases,
+            'release_stats' => [
+                'count' => \count($releases),
+                'atRisk' => \count(array_filter($releases, fn (ReleaseReadiness $r) => ReleaseReadiness::ERROR === $r->getLevel())),
+                'issuesInError' => array_sum(array_map(fn (ReleaseReadiness $r) => $r->countIssuesInAlert(ReleaseReadiness::ERROR), $releases)),
+            ],
             'version_problems' => \count(array_filter($report['versions'], fn ($v) => \in_array($v['level'], ['warning', 'danger'], true))),
         ]);
     }

@@ -1,0 +1,91 @@
+{% import '_macros.html.twig' as ui %}
+{# Prochaines livraisons : variable "releases" (ReleaseReadiness[]) #}
+{% set level_class = {error: 'danger', warning: 'warning', ok: 'success'} %}
+<div class="row g-3 mb-4">
+    {% for release in releases %}
+        {% set level = release.level %}
+        {% set counts = release.counts %}
+        <div class="col-12 col-xl-6">
+            <div class="card h-100 border-{{ level_class[level] }} release-card">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <span class="badge {{ release.isWs ? 'text-bg-info' : 'text-bg-dark' }}" title="{{ release.isWs ? 'Projet web services' : 'Mon projet' }}">{{ release.projectKey }}</span>
+                        <a href="{{ release.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ release.name }}</a>
+                    </div>
+                    <div class="text-nowrap">
+                        {% if release.date %}
+                            <i class="bi bi-calendar-event"></i> {{ release.date|date('d/m/Y') }}
+                            {% if release.overdue %}
+                                <span class="badge text-bg-danger">en retard</span>
+                            {% else %}
+                                <span class="badge {{ release.daysLeft <= settings.startDays ? 'text-bg-danger' : (release.daysLeft <= 2 * settings.startDays ? 'text-bg-warning' : 'text-bg-secondary') }}" title="Jours ouvrés restants, aujourd'hui inclus">J-{{ release.daysLeft }}</span>
+                            {% endif %}
+                            <span class="small text-muted" title="Source de la date">{{ release.confluenceDate ? 'Confluence' : 'Jira' }}</span>
+                        {% else %}
+                            <span class="badge text-bg-warning">sans date</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if release.total == 0 %}
+                        <p class="text-muted small mb-2">Aucun ticket dans cette version{{ release.isWs and settings.wsLabels ? ' (avec l\'étiquette ' ~ settings.wsLabels|join(', ') ~ ')' }}.</p>
+                    {% else %}
+                        <div class="d-flex justify-content-between small text-muted"><span>Avancement</span><span>{{ release.progress }} %</span></div>
+                        <div class="progress mb-2" style="height: 10px">
+                            <div class="progress-bar bg-{{ level_class[level] }}" style="width: {{ release.progress }}%"></div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 small mb-2">
+                            <span class="badge text-bg-secondary">À faire : {{ counts.new }}</span>
+                            <span class="badge text-bg-primary">En cours : {{ counts.indeterminate }}</span>
+                            <span class="badge text-bg-success">Terminés : {{ counts.done }}</span>
+                            {% if release.remainingPoints > 0 %}<span class="badge text-bg-info">{{ release.remainingPoints }} pts restants</span>{% endif %}
+                            {% if release.countIssuesInAlert('error') %}<span class="badge text-bg-danger"><i class="bi bi-x-octagon"></i> {{ release.countIssuesInAlert('error') }} ticket(s) à risque</span>{% endif %}
+                            {% if release.countIssuesInAlert('warning') %}<span class="badge text-bg-warning"><i class="bi bi-exclamation-triangle"></i> {{ release.countIssuesInAlert('warning') }} à surveiller</span>{% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% for alert in release.alerts %}
+                        <div class="small {{ alert.level == 'error' ? 'text-danger fw-semibold' : 'text-warning-emphasis' }}">
+                            <i class="bi {{ alert.level == 'error' ? 'bi-x-octagon-fill' : 'bi-exclamation-triangle-fill' }}"></i> {{ alert.message }}
+                        </div>
+                    {% endfor %}
+                    {% if level == 'ok' and release.total > 0 %}
+                        <div class="small text-success"><i class="bi bi-check-circle-fill"></i> Rien ne menace la date.</div>
+                    {% endif %}
+
+                    {% if release.total > 0 %}
+                        <details class="mt-2" {{ level == 'error' ? 'open' }}>
+                            <summary class="small">Tickets de la version ({{ release.total }})</summary>
+                            <table class="table table-sm small mt-2 mb-0 align-top">
+                                <tbody>
+                                {% for view in release.sortedIssues %}
+                                    {% set issue = view.issue %}
+                                    {% set issueLevel = release.issueLevel(issue.key) %}
+                                    <tr class="{{ issue.done ? 'text-muted' }}">
+                                        <td class="text-nowrap" style="width: 1%">
+                                            {% if issueLevel == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>{% elseif issueLevel == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>{% elseif issue.done %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-circle text-muted"></i>{% endif %}
+                                            <a href="{{ issue.url }}" target="_blank" rel="noopener">{{ issue.key }}</a>
+                                        </td>
+                                        <td>
+                                            {{ issue.summary }}
+                                            {% for alert in release.issueAlerts[issue.key] ?? [] %}
+                                                <div class="{{ alert.level == 'error' ? 'text-danger' : 'text-warning-emphasis' }}">{{ alert.message }}</div>
+                                            {% endfor %}
+                                        </td>
+                                        <td class="text-nowrap">{{ ui.status_badge(issue) }}</td>
+                                        <td class="text-nowrap">{{ issue.assigneeName ?? '' }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </details>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="col"><div class="alert alert-light border mb-0">
+            {{ only_problems ? 'Aucune version à risque 👍' : 'Aucune version non livrée dans les ' ~ settings.horizonDays ~ ' prochains jours.' }}
+        </div></div>
+    {% endfor %}
+</div>

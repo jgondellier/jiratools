@@ -20,6 +20,14 @@
                         </div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label" for="myComponents">Mes projets dans le calendrier <span class="text-muted">(facultatif)</span></label>
+                        <textarea class="form-control" name="myComponents" id="myComponents" rows="2" placeholder="APP = PORTAIL">{{ my_components_text }}</textarea>
+                        <div class="form-text">
+                            Seulement si les versions Jira de vos projets ne portent que le numéro (« 1.5.0 ») alors que le calendrier
+                            les écrit avec un nom (« 1.5.0 PORTAIL »). Un numéro seul n'est jamais rapproché d'une ligne d'un autre composant.
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label" for="wsLabels">Étiquette des tickets WS</label>
                         <input class="form-control" name="wsLabels" id="wsLabels" value="{{ settings.wsLabels|join(', ') }}" placeholder="ex. : ws-mon-equipe">
                         <div class="form-text">
@@ -46,6 +54,18 @@
                         <label class="form-label" for="marginDays">Marge minimale (jours)</label>
                         <input type="number" min="0" class="form-control" name="marginDays" id="marginDays" value="{{ settings.marginDays }}" style="max-width: 120px">
                         <div class="form-text">La livraison WS doit avoir lieu au moins N jours avant la date de ma version (0 = le jour même au plus tard).</div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label" for="horizonDays">Prochaines livraisons (jours)</label>
+                            <input type="number" min="1" class="form-control" name="horizonDays" id="horizonDays" value="{{ settings.horizonDays }}">
+                            <div class="form-text">Versions livrées dans les N prochains jours (plus les versions en retard ou sans date).</div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label" for="startDays">Démarrage au plus tard (jours ouvrés)</label>
+                            <input type="number" min="0" class="form-control" name="startDays" id="startDays" value="{{ settings.startDays }}">
+                            <div class="form-text">Ticket pas commencé à N jours ouvrés de la livraison : alerte rouge (orange à 2×N).</div>
+                        </div>
                     </div>
                     <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
                     {% if settings.configured %}<a href="{{ path('delivery') }}" class="btn btn-outline-secondary">Voir les livraisons</a>{% endif %}
