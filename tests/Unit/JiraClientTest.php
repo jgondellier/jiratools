@@ -129,4 +129,65 @@ class JiraClientTest extends TestCase
     {
         self::assertSame('"a \"b\" c\\\\"', JiraClient::quote('a "b" c\\'));
     }
+
+    private function rankClient(array &$jqls, string $rankField = 'Rank', ?ArrayAdapter $cache = null, bool $rankFails = true): JiraClient
+    {
+        $mock = new MockHttpClient(function (string $method, string $url) use (&$jqls, $rankFails) {
+            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+            $jqls[] = $query['jql'];
+            if ($rankFails && preg_match('/ORDER BY (Rank|cf\[10019\])/', $query['jql'])) {
+                return new MockResponse(json_encode(['errorMessages' => ["Impossible de trier en utilisant le champ 'rank'."]]), ['http_code' => 400]);
+            }
+
+            return new MockResponse(json_encode(['issues' => [self::rawIssue('APP-1')], 'isLast' => true]));
+        });
+        $http = new AtlassianHttp($mock, new ArrayAdapter(), null, null, 'Jira', 'https://jira.test', 'me', 'tok', 0);
+
+        return new JiraClient($http, 'cloud', 'customfield_10016', 'customfield_10020', 'customfield_10021', $rankField, $cache ?? new ArrayAdapter());
+    }
+
+    public function testRankSortFallsBackWhenRefused(): void
+    {
+        $jqls = [];
+        $cache = new ArrayAdapter();
+        $client = $this->rankClient($jqls, 'Rank', $cache);
+
+        $issues = $client->search('project = APP ORDER BY Rank ASC');
+
+        self::assertCount(1, $issues);
+        self::assertSame(['project = APP ORDER BY Rank ASC', 'project = APP ORDER BY '.JiraClient::FALLBACK_ORDER], $jqls);
+        self::assertTrue($client->isRankUnavailable());
+        self::assertStringContainsString(rawurlencode('priority DESC'), $client->searchUrl('project = APP ORDER BY Rank ASC'));
+
+        // Requête suivante (même pour une autre instance partageant le cache) : directement le tri de remplacement
+        $jqls = [];
+        $this->rankClient($jqls, 'Rank', $cache)->search('project = APP ORDER BY Rank ASC');
+        self::assertSame(['project = APP ORDER BY '.JiraClient::FALLBACK_ORDER], $jqls);
+    }
+
+    public function testConfiguredRankField(): void
+    {
+        $jqls = [];
+        $client = $this->rankClient($jqls, 'cf[10019]', null, false);
+
+        $client->search('sprint = 3 ORDER BY Rank ASC');
+
+        self::assertSame(['sprint = 3 ORDER BY cf[10019] ASC'], $jqls);
+        self::assertFalse($client->isRankUnavailable());
+    }
+
+    public function testOtherJqlErrorsAreNotHidden(): void
+    {
+        $mock = new MockHttpClient(fn () => new MockResponse(json_encode(['errorMessages' => ['Le champ « foo » n\'existe pas.']]), ['http_code' => 400]));
+        $http = new AtlassianHttp($mock, new ArrayAdapter(), null, null, 'Jira', 'https://jira.test', 'me', 'tok', 0);
+        $client = new JiraClient($http, 'cloud', 'a', 'b', 'c', 'Rank', new ArrayAdapter());
+
+        try {
+            $client->search('foo = bar ORDER BY Rank ASC');
+            self::fail('Une exception était attendue');
+        } catch (AtlassianException $e) {
+            self::assertStringContainsString('foo', $e->getMessage());
+        }
+        self::assertFalse($client->isRankUnavailable(), 'le tri ne doit pas être désactivé pour une autre erreur');
+    }
 }

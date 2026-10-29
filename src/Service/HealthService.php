@@ -125,7 +125,7 @@ class HealthService
             $result[$id] = [
                 'title' => $title,
                 'help' => $help,
-                'jql' => $jql,
+                'jql' => $this->jira->effectiveJql($jql),
                 'url' => $this->jira->searchUrl($jql),
                 'issues' => $this->views->createAll($issues),
                 'error' => $error,

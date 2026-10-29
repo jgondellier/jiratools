@@ -51,8 +51,9 @@ class BacklogController extends AbstractController
             'summary' => $backlog->summarize($all),
             'filtered_summary' => $backlog->summarize($issues),
             'filters' => $filters,
-            'jql' => $jql,
+            'jql' => $jira->effectiveJql($jql),
             'jira_url' => $jira->searchUrl($jql),
+            'rank_unavailable' => $jira->isRankUnavailable(),
         ]);
     }
 }

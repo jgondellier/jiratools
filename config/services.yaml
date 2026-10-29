@@ -51,6 +51,7 @@ services:
             $storyPointsField: '%env(JIRA_STORY_POINTS_FIELD)%'
             $sprintField: '%env(JIRA_SPRINT_FIELD)%'
             $flaggedField: '%env(JIRA_FLAGGED_FIELD)%'
+            $rankField: '%env(JIRA_RANK_FIELD)%'
 
     App\Confluence\ConfluenceClient:
         arguments:

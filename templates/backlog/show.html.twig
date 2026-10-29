@@ -115,7 +115,12 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="card-footer small text-muted"><code>{{ jql }}</code></div>
+                <div class="card-footer small text-muted">
+                    {% if rank_unavailable %}
+                        <div class="text-warning-emphasis mb-1"><i class="bi bi-sort-down"></i> Votre Jira refuse le tri par rang (ordre du board) : tickets triés par priorité puis date de création. Voir <code>JIRA_RANK_FIELD</code> dans le README.</div>
+                    {% endif %}
+                    <code>{{ jql }}</code>
+                </div>
             </div>
         </div>
     </div>

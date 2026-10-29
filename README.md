@@ -68,6 +68,7 @@ Extensions PHP à activer dans le `php.ini` si ce n'est pas déjà le cas : `pdo
 | `JIRA_STORY_POINTS_FIELD` | `customfield_10016` | Champ des story points (voir `https://<jira>/rest/api/2/field`) |
 | `JIRA_SPRINT_FIELD` | `customfield_10020` | Champ Sprint |
 | `JIRA_FLAGGED_FIELD` | `customfield_10021` | Champ « Flagged » (tickets bloqués) |
+| `JIRA_RANK_FIELD` | `Rank` | Champ de tri « ordre du board » (backlog, sprint). Si votre Jira a plusieurs champs *Rank*, mettez son identifiant, ex. `cf[10019]`. Si Jira refuse ce tri, l'application trie automatiquement par priorité puis date de création (et le signale sur la backlog) |
 | `JIRA_DONE_STATUSES` | `Done,Terminé,Closed,Fermé` | Statuts « terminés » de votre workflow (détection des réouvertures) |
 | `APP_CACHE_TTL` | `60` | Cache des appels Jira/Confluence (s). Le bouton ⟳ ou `?refresh=1` force l'actualisation |
 | `APP_REFRESH_SECONDS` | `120` | Actualisation automatique de « Qui fait quoi » (0 = désactivée) |

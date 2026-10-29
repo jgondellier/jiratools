@@ -2,7 +2,10 @@
 
 namespace App\Jira;
 
+use App\Atlassian\AtlassianException;
 use App\Atlassian\AtlassianHttp;
+use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * Client Jira (Cloud ou Server / Data Center) basé sur l'API REST v2 et l'API Agile.
@@ -14,7 +17,17 @@ class JiraClient
         'fixVersions', 'created', 'updated', 'resolutiondate', 'project', 'parent', 'statuscategorychangedate',
     ];
 
+    /** Tri de remplacement quand Jira refuse le tri par rang */
+    public const FALLBACK_ORDER = 'priority DESC, created ASC';
+
+    /** Mémorise (1 h) que le tri par rang est refusé, pour ne pas renvoyer une requête en erreur à chaque fois */
+    private const RANK_UNAVAILABLE_KEY = 'jira_rank_unavailable';
+
+    /** Repère "ORDER BY Rank" dans les JQL de l'application */
+    private const RANK_ORDER_PATTERN = '/\bORDER\s+BY\s+Rank\s+(ASC|DESC)\b/i';
+
     private ?bool $cloud = null;
+    private ?bool $rankUnavailable = null;
 
     public function __construct(
         private readonly AtlassianHttp $jiraHttp,
@@ -22,7 +35,43 @@ class JiraClient
         private readonly string $storyPointsField,
         private readonly string $sprintField,
         private readonly string $flaggedField,
+        private readonly string $rankField = 'Rank',
+        private readonly ?CacheInterface $cache = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
+    }
+
+    /** Le tri par rang (ordre du board) a-t-il été refusé par Jira ? */
+    public function isRankUnavailable(): bool
+    {
+        if (null === $this->rankUnavailable) {
+            $this->rankUnavailable = (bool) $this->cache?->get(self::RANK_UNAVAILABLE_KEY, fn () => false);
+        }
+
+        return $this->rankUnavailable;
+    }
+
+    private function markRankUnavailable(): void
+    {
+        $this->rankUnavailable = true;
+        if ($this->cache) {
+            $this->cache->delete(self::RANK_UNAVAILABLE_KEY);
+            $this->cache->get(self::RANK_UNAVAILABLE_KEY, function ($item) {
+                $item->expiresAfter(3600);
+
+                return true;
+            });
+        }
+    }
+
+    /**
+     * Remplace "ORDER BY Rank" par le champ de rang paramétré, ou par le tri de remplacement.
+     */
+    private function applyRankOrder(string $jql, bool $fallback): string
+    {
+        return preg_replace_callback(self::RANK_ORDER_PATTERN, fn (array $m) => $fallback
+            ? 'ORDER BY '.self::FALLBACK_ORDER
+            : sprintf('ORDER BY %s %s', $this->rankField ?: 'Rank', strtoupper($m[1])), $jql) ?? $jql;
     }
 
     public function isConfigured(): bool
@@ -59,7 +108,7 @@ class JiraClient
 
     public function searchUrl(string $jql): string
     {
-        return $this->jiraHttp->getBaseUrl().'/issues/?jql='.rawurlencode($jql);
+        return $this->jiraHttp->getBaseUrl().'/issues/?jql='.rawurlencode($this->effectiveJql($jql));
     }
 
     public function myself(): array
@@ -70,9 +119,46 @@ class JiraClient
     /**
      * Recherche JQL paginée.
      *
+     * Les JQL triées par "ORDER BY Rank" utilisent le champ JIRA_RANK_FIELD ; si Jira refuse ce tri
+     * (champ Rank absent, ambigu ou non triable), la recherche est relancée avec un tri de remplacement.
+     *
      * @return Issue[]
      */
     public function search(string $jql, int $max = 500, bool $withChangelog = false, array $extraFields = []): array
+    {
+        if (!preg_match(self::RANK_ORDER_PATTERN, $jql)) {
+            return $this->doSearch($jql, $max, $withChangelog, $extraFields);
+        }
+
+        if (!$this->isRankUnavailable()) {
+            try {
+                return $this->doSearch($this->applyRankOrder($jql, false), $max, $withChangelog, $extraFields);
+            } catch (AtlassianException $e) {
+                if (400 !== $e->getCode()) {
+                    throw $e;
+                }
+                // Vérifie que c'est bien le tri qui pose problème avant de le désactiver
+                $this->logger?->warning('Tri par rang refusé par Jira ({msg}), tri de remplacement : {fallback}', ['msg' => $e->getMessage(), 'fallback' => self::FALLBACK_ORDER]);
+                $issues = $this->doSearch($this->applyRankOrder($jql, true), $max, $withChangelog, $extraFields);
+                $this->markRankUnavailable();
+
+                return $issues;
+            }
+        }
+
+        return $this->doSearch($this->applyRankOrder($jql, true), $max, $withChangelog, $extraFields);
+    }
+
+    /**
+     * JQL telle qu'envoyée à Jira (tri par rang adapté), pour l'affichage et les liens.
+     */
+    public function effectiveJql(string $jql): string
+    {
+        return preg_match(self::RANK_ORDER_PATTERN, $jql) ? $this->applyRankOrder($jql, $this->isRankUnavailable()) : $jql;
+    }
+
+    /** @return Issue[] */
+    private function doSearch(string $jql, int $max, bool $withChangelog, array $extraFields): array
     {
         $fields = array_values(array_unique(array_filter(array_merge(
             self::BASE_FIELDS,
