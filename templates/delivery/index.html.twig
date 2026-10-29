@@ -141,7 +141,15 @@
             <div class="card h-100 {{ report.unlinked ? 'border-danger' }}">
                 <div class="card-header"><i class="bi bi-link-45deg"></i> Tickets WS sans lien vers un ticket de mes projets <span class="badge {{ report.unlinked ? 'text-bg-danger' : 'text-bg-success' }}">{{ report.unlinked|length }}</span></div>
                 <div class="card-body">
-                    <p class="small text-muted">Tickets WS non terminés, assignés à un membre suivi ou dans un sprint actif de mes boards : chacun doit être lié à un ticket de mes projets.</p>
+                    <p class="small text-muted">
+                        {% if settings.wsLabels %}
+                            Tickets non terminés des projets WS portant l'étiquette {% for l in settings.wsLabels %}<span class="badge text-bg-light border"><i class="bi bi-tag"></i> {{ l }}</span> {% endfor %}:
+                        {% else %}
+                            Tickets WS non terminés, assignés à un membre suivi ou dans un sprint actif de mes boards
+                            (<a href="{{ path('admin_deliveries') }}">paramétrez l'étiquette</a> de vos tickets WS pour un contrôle précis) :
+                        {% endif %}
+                        chacun doit être lié à un ticket de mes projets.
+                    </p>
                     {% for issue in report.unlinked %}
                         <div class="mb-2">{{ _self.issue_link(issue) }}{% if issue.assigneeName %}<div class="small"><i class="bi bi-person"></i> {{ issue.assigneeName }}</div>{% endif %}</div>
                     {% else %}
@@ -157,7 +165,7 @@
                 <div class="card-header"><i class="bi bi-calendar-check"></i> Versions WS : date Jira / date Confluence</div>
                 <div class="table-responsive">
                     <table class="table table-sm mb-0 small">
-                        <thead class="table-light"><tr><th>Projet</th><th>Version</th><th>Confluence</th><th>Jira</th><th></th></tr></thead>
+                        <thead class="table-light"><tr><th>Projet</th><th>Version</th><th>Confluence</th><th>Jira</th><th>Tickets</th><th></th></tr></thead>
                         <tbody>
                         {% for v in report.versions %}
                             <tr class="{{ v.level == 'danger' ? 'table-danger' : (v.level == 'warning' ? 'table-warning' : '') }}">
@@ -165,10 +173,11 @@
                                 <td><code>{{ v.name }}</code>{% if v.released %} <span class="badge text-bg-success">livrée</span>{% endif %}</td>
                                 <td>{{ v.confluenceDate ? v.confluenceDate|date('d/m/Y') : '—' }}</td>
                                 <td>{{ v.jiraDate ? v.jiraDate|date('d/m/Y') : '—' }}</td>
+                                <td>{% for key in v.issues|slice(0, 3) %}<a href="{{ jira_browse ~ key }}" target="_blank" rel="noopener">{{ key }}</a>{{ not loop.last ? ', ' }}{% endfor %}{% if v.issues|length > 3 %} +{{ v.issues|length - 3 }}{% endif %}</td>
                                 <td>{% if v.message %}{{ v.message }}{% elseif v.level == 'success' %}<i class="bi bi-check-circle-fill text-success"></i>{% endif %}</td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="5" class="text-muted text-center py-3">Aucune version (non archivée, récente ou à venir).</td></tr>
+                            <tr><td colspan="6" class="text-muted text-center py-3">Aucune version sur les tickets WS suivis ou liés.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>

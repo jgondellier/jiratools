@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Delivery\DeliveryCheck;
 use App\Delivery\DeliveryService;
 use App\Delivery\DeliverySettings;
+use App\Jira\JiraClient;
 use App\Repository\ProjectRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,7 +18,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class DeliveryController extends AbstractController
 {
     #[Route('/livraisons', name: 'delivery', methods: ['GET'])]
-    public function index(Request $request, DeliverySettings $settings, DeliveryService $deliveries, ProjectRepository $projectRepository): Response
+    public function index(Request $request, DeliverySettings $settings, DeliveryService $deliveries, ProjectRepository $projectRepository, JiraClient $jira): Response
     {
         if (!$settings->isConfigured()) {
             $this->addFlash('info', 'Indiquez d\'abord les projets Jira des web services et la page Confluence du calendrier des livraisons.');
@@ -52,6 +53,7 @@ class DeliveryController extends AbstractController
             'by_version' => $byVersion,
             'counts' => $counts,
             'settings' => $settings,
+            'jira_browse' => rtrim($jira->browseUrl('X'), 'X'),
             'version_problems' => \count(array_filter($report['versions'], fn ($v) => \in_array($v['level'], ['warning', 'danger'], true))),
         ]);
     }

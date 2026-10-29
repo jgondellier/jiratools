@@ -18,28 +18,32 @@ use PHPUnit\Framework\TestCase;
 
 class DeliveryServiceTest extends TestCase
 {
+    private ?string $lastWsJql = null;
+
     private const PAGE = '<table><tr><th>Date</th><th>Version</th></tr>'
         .'<tr><td>05/11/2026</td><td>WS-Commande 1.4.2</td></tr>'
         .'<tr><td>18/11/2026</td><td>WS-Commande 1.4.3</td></tr>'
         .'<tr><td>12/12/2026</td><td>WS-Commande 1.5.0</td></tr>'
         .'<tr><td>01/01/2020</td><td>WS-Commande 0.9</td></tr></table>';
 
-    private static function issue(string $key, array $versions = [], array $links = [], string $category = Issue::CATEGORY_IN_PROGRESS): Issue
+    private static function issue(string $key, array $versions = [], array $links = [], string $category = Issue::CATEGORY_IN_PROGRESS, array $labels = []): Issue
     {
         return new Issue(
             $key, 'Résumé '.$key, 'https://jira.test/browse/'.$key, explode('-', $key)[0], 'Statut', $category, 'Story',
-            null, null, null, null, null, null, [], [], array_keys($versions), [], null, false, null, null, null, null,
-            versionDetails: array_map(fn ($name, $date) => ['name' => $name, 'releaseDate' => $date ? new \DateTimeImmutable($date) : null, 'released' => false], array_keys($versions), $versions),
+            null, null, null, null, null, null, [], $labels, array_keys($versions), [], null, false, null, null, null, null,
+            // Version considérée livrée si sa date est passée
+            versionDetails: array_map(fn ($name, $date) => ['name' => $name, 'releaseDate' => $date ? new \DateTimeImmutable($date) : null, 'released' => $date && new \DateTimeImmutable($date) < new \DateTimeImmutable('today')], array_keys($versions), $versions),
             links: array_map(fn ($k) => ['key' => $k, 'summary' => '', 'status' => '', 'statusCategory' => 'new', 'projectKey' => explode('-', $k)[0], 'type' => 'dépend de'], $links),
         );
     }
 
     /** @return array{0: DeliveryService, 1: array} */
-    private function service(array $mine, array $wsLinked, array $wsInProgress, int $margin = 0): DeliveryService
+    private function service(array $mine, array $wsLinked, array $wsInProgress, int $margin = 0, array $labels = []): DeliveryService
     {
         $settingRepo = $this->createMock(SettingRepository::class);
         $settingRepo->method('getValue')->willReturn([
             'wsProjects' => [['key' => 'WSC', 'prefix' => 'WS-Commande']],
+            'wsLabels' => $labels,
             'pageId' => '42',
             'marginDays' => $margin,
         ]);
@@ -47,12 +51,16 @@ class DeliveryServiceTest extends TestCase
         $jira = $this->createMock(JiraClient::class);
         $jira->method('searchMany')->willReturnCallback(function (array $searches) use ($mine, $wsLinked, $wsInProgress) {
             if (isset($searches['mine'])) {
+                $this->lastWsJql = $searches['ws'][0];
+
                 return ['mine' => $mine, 'ws' => $wsInProgress];
             }
+            // Tickets demandés par clé
+            preg_match('/key in \(([^)]*)\)/', $searches['c0'][0], $m);
+            $keys = array_map('trim', explode(',', $m[1]));
 
-            return ['c0' => $wsLinked];
+            return ['c0' => array_values(array_filter($wsLinked, fn (Issue $i) => \in_array($i->key, $keys, true)))];
         });
-        $jira->method('getVersionsMany')->willReturn(['WSC' => []]);
 
         $confluence = $this->createMock(ConfluenceClient::class);
         $confluence->method('getPageContent')->willReturn([
@@ -91,7 +99,7 @@ class DeliveryServiceTest extends TestCase
             self::issue('WSC-6', ['0.9' => '2020-01-01']),
         ];
         $wsInProgress = [
-            self::issue('WSC-2', [], ['APP-2']),
+            self::issue('WSC-2', ['1.5.0' => '2026-12-10'], ['APP-2']),
             self::issue('WSC-7', [], ['OTHER-9']),
         ];
 
@@ -138,5 +146,41 @@ class DeliveryServiceTest extends TestCase
         $ko = $this->service($mine, $ws, [], 3)->getReport([(new Project())->setJiraProjectKey('APP')])['checks'][0];
         self::assertSame(DeliveryCheck::ERROR, $ko->getLevel());
         self::assertStringContainsString('moins de 3 jour(s) avant', self::messages($ko));
+    }
+
+    public function testWsLabel(): void
+    {
+        $mine = [
+            self::issue('APP-1', ['1.0' => '2026-11-20'], ['WSC-1']),
+            self::issue('APP-2', ['1.0' => '2026-11-20'], ['WSC-2']),
+        ];
+        $labelled = [
+            // Étiqueté et lié
+            self::issue('WSC-1', ['1.4.2' => '2026-11-05'], ['APP-1'], Issue::CATEGORY_DONE, ['WS-Equipe']),
+            // Étiqueté, non lié à mes projets
+            self::issue('WSC-8', ['1.5.0' => '2026-12-10'], ['OTHER-1'], Issue::CATEGORY_IN_PROGRESS, ['ws-equipe']),
+            // Étiqueté, non lié, mais terminé : pas d'alerte
+            self::issue('WSC-9', [], [], Issue::CATEGORY_DONE, ['ws-equipe']),
+        ];
+        // Lié mais sans l'étiquette : lu à part, contrôlé et signalé
+        $linkedOnly = [self::issue('WSC-2', ['0.9' => '2020-01-01'], ['APP-2'], Issue::CATEGORY_DONE, ['autre'])];
+
+        $report = $this->service($mine, $linkedOnly, $labelled, 0, ['ws-equipe'])->getReport([(new Project())->setJiraProjectKey('APP')]);
+
+        self::assertStringContainsString('labels in ("ws-equipe")', $this->lastWsJql);
+        self::assertStringContainsString('project in ("WSC")', $this->lastWsJql);
+
+        $checks = [];
+        foreach ($report['checks'] as $check) {
+            $checks[$check->issue->key] = $check;
+        }
+        self::assertSame(DeliveryCheck::OK, $checks['APP-1']->getLevel(), 'étiquette reconnue sans tenir compte de la casse');
+        self::assertStringContainsString('n\'a pas l\'étiquette ws-equipe', self::messages($checks['APP-2']));
+
+        self::assertSame(['WSC-8'], array_map(fn (Issue $i) => $i->key, $report['unlinked']));
+
+        // Versions : uniquement celles des tickets WS suivis ou liés
+        self::assertSame(['1.4.2', '1.5.0'], array_column($report['versions'], 'name'), '0.9 livrée il y a plus de 90 jours exclue');
+        self::assertSame(['WSC-8'], $report['versions'][1]['issues']);
     }
 }

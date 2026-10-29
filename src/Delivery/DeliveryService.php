@@ -68,7 +68,7 @@ class DeliveryService
             return ['calendar' => $calendar, 'checks' => [], 'versions' => [], 'unlinked' => [], 'myVersionsWithoutDate' => []];
         }
 
-        // 1) Mes tickets à livrer (versions non livrées, ou livrées depuis moins de 30 jours) et tickets WS en cours
+        // 1) Mes tickets à livrer (versions non livrées, ou livrées depuis moins de 30 jours) et tickets WS suivis
         $searches = [
             'mine' => [
                 "$scope AND (fixVersion in unreleasedVersions() OR (fixVersion is EMPTY AND statusCategory != Done) OR resolved >= -30d) ORDER BY key ASC",
@@ -82,19 +82,22 @@ class DeliveryService
                 throw $result;
             }
         }
-        [$mine, $wsInProgress] = [$results['mine'], $results['ws']];
+        [$mine, $tracked] = [$results['mine'], $results['ws']];
 
-        // 2) Tickets WS liés à mes tickets (leurs versions ne sont pas fournies par le lien) + versions Jira WS
-        $linkedKeys = [];
+        // 2) Tickets WS liés à mes tickets (leurs versions ne sont pas fournies par le lien)
+        $wsIssues = [];
+        foreach ($tracked as $issue) {
+            $wsIssues[$issue->key] = $issue;
+        }
+        $missing = [];
         foreach ($mine as $issue) {
             foreach ($issue->links as $link) {
-                if (\in_array($link['projectKey'], $wsKeys, true)) {
-                    $linkedKeys[$link['key']] = true;
+                if (\in_array($link['projectKey'], $wsKeys, true) && !isset($wsIssues[$link['key']])) {
+                    $missing[$link['key']] = true;
                 }
             }
         }
-        $wsIssues = $this->fetchByKeys(array_keys($linkedKeys));
-        $versionsByProject = $this->jira->getVersionsMany($wsKeys);
+        $wsIssues += $this->fetchByKeys(array_keys($missing));
 
         // 3) Contrôles
         $checks = [];
@@ -116,13 +119,15 @@ class DeliveryService
         }
         usort($checks, fn (DeliveryCheck $a, DeliveryCheck $b) => [$a->myDate === null, $a->myDate, $a->myVersion, $a->issue->key] <=> [$b->myDate === null, $b->myDate, $b->myVersion, $b->issue->key]);
 
-        // Tickets WS non liés à un ticket de mes projets
-        $unlinked = array_values(array_filter($wsInProgress, fn (Issue $ws) => [] === array_filter($ws->links, fn (array $l) => \in_array($l['projectKey'], $myKeys, true))));
+        // Tickets WS suivis (étiquetés) non terminés, sans lien vers un ticket de mes projets
+        $unlinked = array_values(array_filter($tracked, fn (Issue $ws) => !$ws->isDone()
+            && [] === array_filter($ws->links, fn (array $l) => \in_array($l['projectKey'], $myKeys, true))));
 
         return [
             'calendar' => $calendar,
             'checks' => $checks,
-            'versions' => $this->compareVersions($versionsByProject, $calendar),
+            // Versions WS à contrôler : celles des tickets WS suivis ou liés (le projet WS peut en contenir d'autres)
+            'versions' => $this->compareVersions(array_values($wsIssues), $calendar),
             'unlinked' => $unlinked,
             'myVersionsWithoutDate' => array_keys($myVersionsWithoutDate),
         ];
@@ -163,6 +168,10 @@ class DeliveryService
         }
 
         $check = new DeliveryCheck($issue, $myDate, $myVersion, $ws, $linkType, $wsVersions, $wsDate);
+
+        if ([] !== $this->settings->getWsLabels() && !$this->settings->hasWsLabel($ws->labels)) {
+            $check->add(DeliveryCheck::WARNING, sprintf('Le ticket WS n\'a pas l\'étiquette %s.', implode(' / ', $this->settings->getWsLabels())));
+        }
 
         if (!$myVersion) {
             $check->add(DeliveryCheck::WARNING, 'Mon ticket n\'a pas de version : impossible de vérifier le calendrier.');
@@ -214,41 +223,52 @@ class DeliveryService
     }
 
     /**
-     * Versions Jira WS (non archivées, à venir ou livrées depuis moins de 90 jours) comparées au calendrier.
+     * Versions des tickets WS suivis ou liés (à venir, sans date ou livrées depuis moins de 90 jours),
+     * date Jira comparée au calendrier Confluence.
+     *
+     * @param Issue[] $wsIssues
      */
-    private function compareVersions(array $versionsByProject, DeliveryCalendar $calendar): array
+    private function compareVersions(array $wsIssues, DeliveryCalendar $calendar): array
     {
         $limit = new \DateTimeImmutable('-90 days');
-        $result = [];
-        foreach ($versionsByProject as $projectKey => $versions) {
-            $prefix = $this->settings->getPrefix($projectKey);
-            foreach ($versions as $v) {
-                if ($v['archived'] || ($v['released'] && $v['releaseDate'] && $v['releaseDate'] < $limit)) {
-                    continue;
-                }
-                $rows = $calendar->find($v['name'], $prefix);
-                $confluenceDate = $calendar->dateOf($v['name'], $prefix);
-                $ambiguous = $calendar->ambiguousComponents($v['name'], $prefix);
-                [$level, $message] = match (true) {
-                    null !== $calendar->error => ['secondary', null],
-                    [] !== $ambiguous => ['warning', 'Plusieurs composants possibles ('.implode(', ', $ambiguous).') : précisez le composant du projet'],
-                    [] === $rows => ['warning', 'Absente du calendrier Confluence'],
-                    null === $confluenceDate => ['warning', 'Date illisible dans Confluence'],
-                    null === $v['releaseDate'] => ['warning', 'Pas de date dans Jira'],
-                    $v['releaseDate'] != $confluenceDate => ['danger', 'Dates différentes'],
-                    default => ['success', null],
-                };
-                $result[] = [
-                    'projectKey' => $projectKey,
-                    'name' => $v['name'],
-                    'released' => $v['released'],
-                    'jiraDate' => $v['releaseDate'],
-                    'confluenceDate' => $confluenceDate,
-                    'rows' => $rows,
-                    'level' => $level,
-                    'message' => $message,
-                ];
+        $versions = [];
+        foreach ($wsIssues as $issue) {
+            foreach ($issue->versionDetails as $v) {
+                $key = $issue->projectKey.'|'.$v['name'];
+                $versions[$key] ??= $v + ['projectKey' => $issue->projectKey, 'issues' => []];
+                $versions[$key]['issues'][$issue->key] = $issue->key;
             }
+        }
+
+        $result = [];
+        foreach ($versions as $v) {
+            if ($v['released'] && $v['releaseDate'] && $v['releaseDate'] < $limit) {
+                continue;
+            }
+            $prefix = $this->settings->getPrefix($v['projectKey']);
+            $rows = $calendar->find($v['name'], $prefix);
+            $confluenceDate = $calendar->dateOf($v['name'], $prefix);
+            $ambiguous = $calendar->ambiguousComponents($v['name'], $prefix);
+            [$level, $message] = match (true) {
+                null !== $calendar->error => ['secondary', null],
+                [] !== $ambiguous => ['warning', 'Plusieurs composants possibles ('.implode(', ', $ambiguous).') : précisez le composant du projet'],
+                [] === $rows => ['warning', 'Absente du calendrier Confluence'],
+                null === $confluenceDate => ['warning', 'Date illisible dans Confluence'],
+                null === $v['releaseDate'] => ['warning', 'Pas de date dans Jira'],
+                $v['releaseDate'] != $confluenceDate => ['danger', 'Dates différentes'],
+                default => ['success', null],
+            };
+            $result[] = [
+                'projectKey' => $v['projectKey'],
+                'name' => $v['name'],
+                'released' => $v['released'],
+                'jiraDate' => $v['releaseDate'],
+                'confluenceDate' => $confluenceDate,
+                'rows' => $rows,
+                'issues' => array_values($v['issues']),
+                'level' => $level,
+                'message' => $message,
+            ];
         }
         usort($result, fn ($a, $b) => [$a['confluenceDate'] ?? $a['jiraDate'] ?? new \DateTimeImmutable('2999-01-01'), $a['name']] <=> [$b['confluenceDate'] ?? $b['jiraDate'] ?? new \DateTimeImmutable('2999-01-01'), $b['name']]);
 
@@ -256,12 +276,21 @@ class DeliveryService
     }
 
     /**
-     * Tickets WS "sur le board" : non terminés, et assignés à un membre suivi ou dans un sprint actif de mes boards.
+     * Tickets WS suivis : ceux portant l'étiquette WS (non terminés ou résolus depuis moins de 30 jours) ;
+     * sans étiquette paramétrée, les tickets WS non terminés assignés à un membre suivi ou dans un sprint actif.
      *
      * @param Project[] $projects
      */
     private function wsInProgressJql(array $wsKeys, array $projects): string
     {
+        if ([] !== $labels = $this->settings->getWsLabels()) {
+            return sprintf(
+                'project in (%s) AND labels in (%s) AND (statusCategory != Done OR resolved >= -30d) ORDER BY key ASC',
+                JiraClient::quoteList($wsKeys),
+                JiraClient::quoteList($labels),
+            );
+        }
+
         $conditions = [];
         $members = array_map(fn ($d) => $d->getJiraAccountId(), $this->developers->findBy(['active' => true]));
         if ([] !== $members) {

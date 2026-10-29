@@ -20,6 +20,14 @@
                         </div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label" for="wsLabels">Étiquette des tickets WS</label>
+                        <input class="form-control" name="wsLabels" id="wsLabels" value="{{ settings.wsLabels|join(', ') }}" placeholder="ex. : ws-mon-equipe">
+                        <div class="form-text">
+                            Étiquette Jira que vous ajoutez sur vos tickets dans les projets WS (plusieurs possibles, séparées par des virgules).
+                            Ces tickets doivent être liés à un ticket de vos projets ; un ticket WS lié mais sans l'étiquette est signalé.
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label" for="page">Page Confluence du calendrier des livraisons</label>
                         <input class="form-control" name="page" id="page" value="{{ settings.pageId }}" placeholder="URL de la page ou identifiant">
                     </div>

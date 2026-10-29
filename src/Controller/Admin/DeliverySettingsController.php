@@ -17,6 +17,7 @@ class DeliverySettingsController extends AbstractController
         if ($request->isMethod('POST') && $this->isCsrfTokenValid('deliveries', (string) $request->request->get('_token'))) {
             $settings->save([
                 'wsProjects' => DeliverySettings::parseProjects((string) $request->request->get('wsProjects')),
+                'wsLabels' => (string) $request->request->get('wsLabels'),
                 'pageId' => (string) $request->request->get('page'),
                 'dateColumn' => trim((string) $request->request->get('dateColumn')),
                 'versionColumn' => trim((string) $request->request->get('versionColumn')),

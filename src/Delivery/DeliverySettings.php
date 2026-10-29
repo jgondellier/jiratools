@@ -13,6 +13,7 @@ class DeliverySettings
 
     private const DEFAULTS = [
         'wsProjects' => [],          // [{key: "WSC", prefix: "WS-Commande"}]
+        'wsLabels' => [],            // étiquettes qui identifient mes tickets WS dans ces projets
         'pageId' => null,            // page Confluence du calendrier des livraisons
         'dateColumn' => 'Date',
         'versionColumn' => 'Version',
@@ -35,6 +36,7 @@ class DeliverySettings
         $clean = array_replace(self::DEFAULTS, array_intersect_key($values, self::DEFAULTS));
         $clean['marginDays'] = max(0, (int) $clean['marginDays']);
         $clean['pageId'] = self::extractPageId((string) $clean['pageId']);
+        $clean['wsLabels'] = self::parseLabels(\is_array($clean['wsLabels']) ? implode(',', $clean['wsLabels']) : (string) $clean['wsLabels']);
         $this->settings->setValue(self::SETTING, $clean);
         $this->values = $clean;
     }
@@ -54,6 +56,32 @@ class DeliverySettings
     public function getWsKeys(): array
     {
         return array_values(array_unique(array_map(fn (array $p) => $p['key'], $this->getWsProjects())));
+    }
+
+    /** @return string[] */
+    public function getWsLabels(): array
+    {
+        return array_values(array_filter((array) $this->all()['wsLabels'], 'is_string'));
+    }
+
+    /** Le ticket porte-t-il une des étiquettes WS (sans tenir compte de la casse) ? */
+    public function hasWsLabel(array $labels): bool
+    {
+        $wanted = array_map('mb_strtolower', $this->getWsLabels());
+
+        return [] !== array_intersect($wanted, array_map('mb_strtolower', $labels));
+    }
+
+    /**
+     * "ws-mon-equipe, ws-autre" => ["ws-mon-equipe", "ws-autre"] (une étiquette Jira ne contient pas d'espace)
+     *
+     * @return string[]
+     */
+    public static function parseLabels(string $text): array
+    {
+        $labels = array_filter(array_map('trim', preg_split('/[\s,;]+/', $text) ?: []));
+
+        return array_values(array_unique($labels));
     }
 
     public function getPrefix(string $projectKey): ?string
