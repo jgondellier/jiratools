@@ -38,6 +38,21 @@ class ConfluenceClient
     }
 
     /**
+     * Contenu d'une page au format "storage" (XHTML Confluence).
+     *
+     * @return array{info: ConfluencePageInfo, storage: string}
+     */
+    public function getPageContent(string $pageId): array
+    {
+        $data = $this->confluenceHttp->get(
+            'rest/api/content/'.rawurlencode($pageId),
+            ['expand' => 'body.storage,version,space,history.lastUpdated'],
+        );
+
+        return ['info' => $this->mapPage($data), 'storage' => (string) ($data['body']['storage']['value'] ?? '')];
+    }
+
+    /**
      * Plusieurs pages lues en parallèle.
      *
      * @param string[] $pageIds

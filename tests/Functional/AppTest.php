@@ -101,6 +101,34 @@ class AppTest extends WebTestCase
         }
     }
 
+    public function testDeliveriesSettingsAndPage(): void
+    {
+        $this->em->persist((new Project())->setName('Portail')->setJiraProjectKey('APP')->setComponents(['Portail']));
+        $this->em->flush();
+
+        // Non paramétré : redirection vers le paramétrage
+        $this->client->request('GET', '/livraisons');
+        self::assertResponseRedirects('/parametrage/livraisons');
+
+        $crawler = $this->client->request('GET', '/parametrage/livraisons');
+        $this->client->submit($crawler->selectButton('Enregistrer et tester la lecture')->form([
+            'wsProjects' => "wsc = WS-Commande\ninvalide!",
+            'page' => 'https://jira.test/wiki/spaces/WS/pages/777/Calendrier',
+            'marginDays' => '2',
+        ]));
+        self::assertResponseRedirects('/parametrage/livraisons');
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('textarea[name=wsProjects]', 'WSC = WS-Commande');
+        self::assertInputValueSame('page', '777');
+        self::assertSelectorTextContains('table', 'WS-Commande 1.4.2');
+        self::assertSelectorTextContains('table', '05/11/2026');
+
+        $this->client->request('GET', '/livraisons');
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('h1', 'Livraisons');
+        self::assertSelectorTextContains('body', 'Calendrier des livraisons');
+    }
+
     /**
      * Coche les statuts donnés (colonne => statut) dans le paramétrage des statuts de travail.
      */

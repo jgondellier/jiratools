@@ -22,3 +22,7 @@ body { background: #f4f6f9; }
 pre.markdown { max-height: 400px; overflow: auto; background: #f8f9fa; padding: 1rem; border-radius: .375rem; }
 .other-work { border-top: 1px dashed #dee2e6; padding-top: .5rem; opacity: .85; }
 .other-work .issue-line { padding-top: .2rem; padding-bottom: .2rem; font-size: .9rem; }
+.delivery-table tr.level-row-error td:first-child { box-shadow: inset 4px 0 0 #dc3545; }
+.delivery-table tr.level-row-warning td:first-child { box-shadow: inset 4px 0 0 #ffc107; }
+.delivery-table tr.level-row-ok td:first-child { box-shadow: inset 4px 0 0 #198754; }
+details.card > summary { cursor: pointer; }

@@ -17,6 +17,8 @@ final class Issue
      * @param string[] $fixVersions
      * @param string[] $sprints
      * @param int[]    $sprintIds
+     * @param array<int, array{name: string, releaseDate: ?\DateTimeImmutable, released: bool}> $versionDetails
+     * @param array<int, array{key: string, summary: string, status: string, statusCategory: string, projectKey: string, type: string}> $links
      */
     public function __construct(
         public readonly string $key,
@@ -45,6 +47,8 @@ final class Issue
         public readonly ?string $parentKey = null,
         public readonly ?string $parentSummary = null,
         public readonly array $sprintIds = [],
+        public readonly array $versionDetails = [],
+        public readonly array $links = [],
     ) {
     }
 

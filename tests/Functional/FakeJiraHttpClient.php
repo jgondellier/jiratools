@@ -23,6 +23,12 @@ class FakeJiraHttpClient extends MockHttpClient
                     ['name' => 'Code Review', 'statusCategory' => ['key' => 'indeterminate', 'name' => 'En cours']],
                     ['name' => 'Terminé', 'statusCategory' => ['key' => 'done', 'name' => 'Terminé']],
                 ]]],
+                (bool) preg_match('#/rest/api/content/\d+$#', $path) && str_contains($query['expand'] ?? '', 'body.storage') => [
+                    'id' => '777', 'title' => 'Calendrier des livraisons', 'version' => ['number' => 1],
+                    'body' => ['storage' => ['value' => '<table><tr><th>Date</th><th>Version</th></tr><tr><td>05/11/2026</td><td>WS-Commande 1.4.2</td></tr></table>']],
+                    '_links' => ['base' => 'https://jira.test/wiki', 'webui' => '/pages/777'],
+                ],
+                str_ends_with($path, '/versions') => [['id' => 1, 'name' => '1.4.2', 'released' => false, 'releaseDate' => '2026-11-05']],
                 str_ends_with($path, '/rest/api/2/myself'), str_ends_with($path, '/rest/api/user/current') => ['displayName' => 'Testeur'],
                 (bool) preg_match('#/board/\d+/sprint$#', $path) => ['isLast' => true, 'values' => 'active' === ($query['state'] ?? '') ? [[
                     'id' => 5, 'name' => 'Sprint 5', 'state' => 'active', 'originBoardId' => 42,

@@ -1,0 +1,30 @@
+{# Aperçu de la lecture du calendrier Confluence : variable "calendar" #}
+{% if calendar.error %}
+    <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle"></i> {{ calendar.error }}</div>
+{% else %}
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-top small">
+            <thead class="table-light">
+            <tr>
+                <th>#</th><th>Date lue</th><th>Versions</th>
+                <th>Autres colonnes</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in calendar.rows %}
+                <tr class="{{ row.date ? '' : 'table-warning' }}">
+                    <td class="text-muted">{{ row.number }}</td>
+                    <td class="text-nowrap">
+                        {% if row.date %}<strong>{{ row.date|date('d/m/Y') }}</strong>{% else %}<span class="text-danger"><i class="bi bi-question-circle"></i> illisible</span>{% endif %}
+                        {% if row.rawDate and (not row.date or row.rawDate != row.date|date('Y-m-d')) %}<div class="text-muted">« {{ row.rawDate }} »</div>{% endif %}
+                    </td>
+                    <td>{% for line in row.versionLines %}<div><code>{{ line }}</code></div>{% endfor %}</td>
+                    <td class="text-muted">{% for header, value in row.otherCells %}{% if value %}<div><strong>{{ header }} :</strong> {{ value }}</div>{% endif %}{% endfor %}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="text-muted text-center py-3">Tableau trouvé mais vide.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}

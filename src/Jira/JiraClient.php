@@ -123,9 +123,9 @@ class JiraClient
      *
      * @throws AtlassianException
      */
-    public function search(string $jql, int $max = 500, bool $withChangelog = false): array
+    public function search(string $jql, int $max = 500, bool $withChangelog = false, array $extraFields = []): array
     {
-        $result = $this->searchMany(['_' => [$jql, $max, $withChangelog]])['_'];
+        $result = $this->searchMany(['_' => [$jql, $max, $withChangelog, $extraFields]])['_'];
         if ($result instanceof AtlassianException) {
             throw $result;
         }
@@ -139,21 +139,19 @@ class JiraClient
      * Les JQL triées par "ORDER BY Rank" utilisent le champ JIRA_RANK_FIELD ; si Jira refuse ce tri
      * (champ Rank absent, ambigu ou non triable), la recherche est relancée avec un tri de remplacement.
      *
-     * @param array<string, array{0: string, 1?: int, 2?: bool}> $searches clé => [jql, nombre max, avec historique]
+     * @param array<string, array{0: string, 1?: int, 2?: bool, 3?: string[]}> $searches clé => [jql, nombre max, avec historique, champs supplémentaires]
      *
      * @return array<string, Issue[]|AtlassianException> clé => tickets, ou l'erreur de cette recherche
      */
     public function searchMany(array $searches): array
     {
-        $fields = implode(',', array_values(array_unique(array_filter(array_merge(
-            self::BASE_FIELDS,
-            [$this->storyPointsField, $this->sprintField, $this->flaggedField],
-        )))));
+        $baseFields = array_merge(self::BASE_FIELDS, [$this->storyPointsField, $this->sprintField, $this->flaggedField]);
 
         $states = [];
         foreach ($searches as $key => $search) {
-            [$jql, $max, $changelog] = $search + [1 => 500, 2 => false];
+            [$jql, $max, $changelog, $extraFields] = $search + [1 => 500, 2 => false, 3 => []];
             $states[$key] = [
+                'fields' => implode(',', array_values(array_unique(array_filter(array_merge($baseFields, $extraFields))))),
                 'jql' => $this->effectiveJql($jql),
                 // Le tri de remplacement n'est tenté que si le tri par rang a été demandé et pas encore refusé
                 'canFallback' => preg_match(self::RANK_ORDER_PATTERN, $jql) && !$this->isRankUnavailable(),
@@ -173,7 +171,7 @@ class JiraClient
         while ($active = array_filter($states, fn (array $st) => !$st['done'])) {
             $requests = [];
             foreach ($active as $key => $st) {
-                $query = ['jql' => $st['jql'], 'maxResults' => $st['pageSize'], 'fields' => $fields];
+                $query = ['jql' => $st['jql'], 'maxResults' => $st['pageSize'], 'fields' => $st['fields']];
                 if ($st['changelog']) {
                     $query['expand'] = 'changelog';
                 }
@@ -341,6 +339,45 @@ class JiraClient
         return $statuses;
     }
 
+    /**
+     * Versions d'un projet Jira avec leur date de livraison.
+     *
+     * @return array<int, array{id: string, name: string, released: bool, archived: bool, releaseDate: ?\DateTimeImmutable, projectKey: string}>
+     */
+    public function getVersions(string $projectKey): array
+    {
+        return $this->getVersionsMany([$projectKey])[$projectKey];
+    }
+
+    /**
+     * @param string[] $projectKeys
+     *
+     * @return array<string, array<int, array{id: string, name: string, released: bool, archived: bool, releaseDate: ?\DateTimeImmutable, projectKey: string}>>
+     */
+    public function getVersionsMany(array $projectKeys): array
+    {
+        $requests = [];
+        foreach (array_unique($projectKeys) as $key) {
+            $requests[$key] = [sprintf('rest/api/2/project/%s/versions', rawurlencode($key)), [], 600];
+        }
+        $result = [];
+        foreach ($this->jiraHttp->getMany($requests) as $key => $data) {
+            if ($data instanceof AtlassianException) {
+                throw $data;
+            }
+            $result[$key] = array_map(fn (array $v) => [
+                'id' => (string) $v['id'],
+                'name' => (string) $v['name'],
+                'released' => (bool) ($v['released'] ?? false),
+                'archived' => (bool) ($v['archived'] ?? false),
+                'releaseDate' => self::day($v['releaseDate'] ?? null),
+                'projectKey' => (string) $key,
+            ], $data);
+        }
+
+        return $result;
+    }
+
     /** @return string[] */
     public function getComponents(string $projectKey): array
     {
@@ -412,6 +449,12 @@ class JiraClient
             components: array_map(fn ($c) => (string) $c['name'], (array) ($f['components'] ?? [])),
             labels: array_map('strval', (array) ($f['labels'] ?? [])),
             fixVersions: array_map(fn ($v) => (string) $v['name'], (array) ($f['fixVersions'] ?? [])),
+            versionDetails: array_map(fn ($v) => [
+                'name' => (string) $v['name'],
+                'releaseDate' => self::day($v['releaseDate'] ?? null),
+                'released' => (bool) ($v['released'] ?? false),
+            ], (array) ($f['fixVersions'] ?? [])),
+            links: $this->mapLinks((array) ($f['issuelinks'] ?? [])),
             sprints: $sprints,
             sprintIds: array_values(array_filter($sprintIds)),
             storyPoints: is_numeric($points) ? (float) $points : null,
@@ -446,6 +489,43 @@ class JiraClient
         $f = $raw['fields'] ?? [];
 
         return $latest ?? self::date($f['statuscategorychangedate'] ?? null) ?? self::date($f['created'] ?? null);
+    }
+
+    /**
+     * Liens vers d'autres tickets (champ issuelinks).
+     *
+     * @return array<int, array{key: string, summary: string, status: string, statusCategory: string, projectKey: string, type: string}>
+     */
+    private function mapLinks(array $links): array
+    {
+        $result = [];
+        foreach ($links as $link) {
+            $other = $link['outwardIssue'] ?? $link['inwardIssue'] ?? null;
+            if (!\is_array($other) || !isset($other['key'])) {
+                continue;
+            }
+            $direction = isset($link['outwardIssue']) ? 'outward' : 'inward';
+            $result[] = [
+                'key' => (string) $other['key'],
+                'summary' => (string) ($other['fields']['summary'] ?? ''),
+                'status' => (string) ($other['fields']['status']['name'] ?? ''),
+                'statusCategory' => (string) ($other['fields']['status']['statusCategory']['key'] ?? Issue::CATEGORY_TODO),
+                'projectKey' => explode('-', (string) $other['key'])[0],
+                'type' => (string) ($link['type'][$direction] ?? $link['type']['name'] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
+
+    /** Date sans heure (ex. date de livraison d'une version, "2026-11-15") */
+    public static function day(mixed $value): ?\DateTimeImmutable
+    {
+        if (!\is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        return \DateTimeImmutable::createFromFormat('!Y-m-d', $value) ?: null;
     }
 
     public static function date(mixed $value): ?\DateTimeImmutable

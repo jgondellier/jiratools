@@ -1,0 +1,189 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Livraisons{% endblock %}
+
+{% macro issue_link(issue) %}
+    <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
+    <span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>
+    <div class="small text-muted">{{ issue.summary }}</div>
+{% endmacro %}
+
+{% block body %}
+    {% set calendar = report.calendar %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Livraisons des web services</h1>
+        <form class="d-flex flex-wrap gap-2 align-items-center" method="get">
+            <select name="project" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Tous mes projets</option>
+                {% for p in projects %}<option value="{{ p.id }}" {{ project_id == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+            </select>
+            <div class="form-check form-switch text-nowrap">
+                <input class="form-check-input" type="checkbox" name="problems" value="1" id="problems" {{ only_problems ? 'checked' }} onchange="this.form.submit()">
+                <label class="form-check-label small" for="problems">Problèmes uniquement</label>
+            </div>
+            <a href="{{ path('delivery', {project: project_id ?: null, problems: only_problems ? 1 : null, refresh: 1}) }}" class="btn btn-sm btn-primary" title="Relire Jira et Confluence"><i class="bi bi-arrow-clockwise"></i></a>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-x-octagon"></i> Livraisons WS en retard ou bloquantes</div><div class="display-6">{{ counts.error }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100"><div class="card-body py-2">
+                <div class="small text-success"><i class="bi bi-check-circle"></i> Cohérents</div><div class="display-6">{{ counts.ok }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ version_problems ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-calendar-x"></i> Versions WS à vérifier (Jira / Confluence)</div><div class="display-6">{{ version_problems }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ report.unlinked ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-link-45deg"></i> Tickets WS non liés</div><div class="display-6">{{ report.unlinked|length }}</div>
+            </div></div>
+        </div>
+    </div>
+
+    {% if calendar.error %}
+        <div class="alert alert-warning"><i class="bi bi-file-earmark-x"></i> Calendrier Confluence illisible : {{ calendar.error }}
+            Les dates Jira des versions WS sont utilisées à la place. <a href="{{ path('admin_deliveries') }}">Paramétrage</a></div>
+    {% endif %}
+
+    {# --- Corrélation par version ------------------------------------------------ #}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-diagram-3"></i> Mes tickets liés à des web services</span>
+            <span class="small text-muted">
+                Règle : la livraison WS (date Confluence, sinon Jira) doit précéder ma version
+                {% if settings.marginDays > 0 %}d'au moins {{ settings.marginDays }} jour(s){% endif %}.
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-top mb-0 delivery-table">
+                <thead class="table-light">
+                <tr><th style="width: 22%">Mon ticket</th><th style="width: 22%">Ticket web service</th><th>Version(s) WS</th><th class="text-nowrap">Livraison WS</th><th>Contrôle</th></tr>
+                </thead>
+                {% for version, checks in by_version %}
+                    {% set first = checks|first %}
+                    <tbody>
+                    <tr class="table-group-divider">
+                        <th colspan="5" class="bg-body-tertiary">
+                            <i class="bi bi-box-seam"></i> {{ version }}
+                            {% if first.myDate %}<span class="badge text-bg-dark ms-1">livraison le {{ first.myDate|date('d/m/Y') }}</span>
+                            {% elseif first.myVersion %}<span class="badge text-bg-warning ms-1">sans date</span>{% endif %}
+                            <span class="text-muted small fw-normal ms-2">{{ checks|length }} lien(s)</span>
+                        </th>
+                    </tr>
+                    {% for check in checks %}
+                        {% set level = check.level %}
+                        <tr class="level-row-{{ level }}">
+                            <td>{{ _self.issue_link(check.issue) }}</td>
+                            <td>
+                                {{ _self.issue_link(check.wsIssue) }}
+                                <div class="small text-muted fst-italic">{{ check.linkType }}</div>
+                            </td>
+                            <td class="small">
+                                {% for v in check.wsVersions %}
+                                    <div class="mb-1">
+                                        <code>{{ v.name }}</code>
+                                        <div class="text-muted">
+                                            Confluence : {{ v.confluenceDate ? v.confluenceDate|date('d/m/Y') : (v.inConfluence ? 'date illisible' : 'absente') }}
+                                            · Jira : {{ v.jiraDate ? v.jiraDate|date('d/m/Y') : '—' }}
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <span class="text-danger">Aucune version</span>
+                                {% endfor %}
+                            </td>
+                            <td class="text-nowrap">
+                                {% if check.wsDate %}
+                                    <strong>{{ check.wsDate|date('d/m/Y') }}</strong>
+                                    {% if check.marginDays is not null %}
+                                        <div class="small {{ check.marginDays < settings.marginDays ? 'text-danger' : 'text-muted' }}">
+                                            {% if check.marginDays >= 0 %}J-{{ check.marginDays }} avant ma version{% else %}{{ -check.marginDays }} j après ma version{% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="small">
+                                {% for problem in check.problems %}
+                                    <div class="{{ problem.level == 'error' ? 'text-danger fw-semibold' : 'text-warning-emphasis' }}">
+                                        <i class="bi {{ problem.level == 'error' ? 'bi-x-octagon-fill' : 'bi-exclamation-triangle-fill' }}"></i> {{ problem.message }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-success"><i class="bi bi-check-circle-fill"></i> OK</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                {% else %}
+                    <tbody><tr><td colspan="5" class="text-center text-muted py-4">
+                        {{ only_problems ? 'Aucun problème 👍' : 'Aucun ticket de mes projets lié à un ticket web service (versions à venir ou livrées depuis 30 jours).' }}
+                    </td></tr></tbody>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        {# --- Tickets WS non liés -------------------------------------------------- #}
+        <div class="col-xl-5">
+            <div class="card h-100 {{ report.unlinked ? 'border-danger' }}">
+                <div class="card-header"><i class="bi bi-link-45deg"></i> Tickets WS sans lien vers un ticket de mes projets <span class="badge {{ report.unlinked ? 'text-bg-danger' : 'text-bg-success' }}">{{ report.unlinked|length }}</span></div>
+                <div class="card-body">
+                    <p class="small text-muted">Tickets WS non terminés, assignés à un membre suivi ou dans un sprint actif de mes boards : chacun doit être lié à un ticket de mes projets.</p>
+                    {% for issue in report.unlinked %}
+                        <div class="mb-2">{{ _self.issue_link(issue) }}{% if issue.assigneeName %}<div class="small"><i class="bi bi-person"></i> {{ issue.assigneeName }}</div>{% endif %}</div>
+                    {% else %}
+                        <p class="text-success mb-0"><i class="bi bi-check-circle-fill"></i> Tous les tickets WS en cours sont liés.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# --- Versions WS : Jira vs Confluence ------------------------------------- #}
+        <div class="col-xl-7">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-calendar-check"></i> Versions WS : date Jira / date Confluence</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 small">
+                        <thead class="table-light"><tr><th>Projet</th><th>Version</th><th>Confluence</th><th>Jira</th><th></th></tr></thead>
+                        <tbody>
+                        {% for v in report.versions %}
+                            <tr class="{{ v.level == 'danger' ? 'table-danger' : (v.level == 'warning' ? 'table-warning' : '') }}">
+                                <td>{{ v.projectKey }}</td>
+                                <td><code>{{ v.name }}</code>{% if v.released %} <span class="badge text-bg-success">livrée</span>{% endif %}</td>
+                                <td>{{ v.confluenceDate ? v.confluenceDate|date('d/m/Y') : '—' }}</td>
+                                <td>{{ v.jiraDate ? v.jiraDate|date('d/m/Y') : '—' }}</td>
+                                <td>{% if v.message %}{{ v.message }}{% elseif v.level == 'success' %}<i class="bi bi-check-circle-fill text-success"></i>{% endif %}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="text-muted text-center py-3">Aucune version (non archivée, récente ou à venir).</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# --- Lecture du calendrier ---------------------------------------------------- #}
+    <details class="card">
+        <summary class="card-header">
+            <i class="bi bi-file-earmark-text"></i> Calendrier lu dans Confluence
+            {% if calendar.pageUrl %}: <a href="{{ calendar.pageUrl }}" target="_blank" rel="noopener">{{ calendar.pageTitle }}</a>{% endif %}
+            <span class="badge text-bg-secondary">{{ calendar.rows|length }} ligne(s)</span>
+        </summary>
+        {{ include('delivery/_calendar.html.twig', {calendar: calendar}) }}
+    </details>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Paramétrage des livraisons{% endblock %}
+
+{% block body %}
+    <h1 class="h3 mb-3"><i class="bi bi-truck"></i> Paramétrage des livraisons</h1>
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <form class="card" method="post">
+                <div class="card-body">
+                    <input type="hidden" name="_token" value="{{ csrf_token('deliveries') }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="wsProjects">Projets Jira des web services</label>
+                        <textarea class="form-control" name="wsProjects" id="wsProjects" rows="3" placeholder="WSC = WS-Commande&#10;WSCLI">{{ projects_text }}</textarea>
+                        <div class="form-text">
+                            Une clé de projet par ligne. Si les versions Jira ne portent que le numéro (ex. « 1.4.2 ») alors que le
+                            calendrier écrit « WS-Commande 1.4.2 », ajoutez <code>= WS-Commande</code> après la clé.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="page">Page Confluence du calendrier des livraisons</label>
+                        <input class="form-control" name="page" id="page" value="{{ settings.pageId }}" placeholder="URL de la page ou identifiant">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label" for="dateColumn">Colonne « date »</label>
+                            <input class="form-control" name="dateColumn" id="dateColumn" value="{{ settings.dateColumn }}">
+                        </div>
+                        <div class="col">
+                            <label class="form-label" for="versionColumn">Colonne « version »</label>
+                            <input class="form-control" name="versionColumn" id="versionColumn" value="{{ settings.versionColumn }}">
+                        </div>
+                        <div class="form-text">Texte contenu dans l'en-tête de colonne (sans tenir compte des majuscules ni des accents).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="marginDays">Marge minimale (jours)</label>
+                        <input type="number" min="0" class="form-control" name="marginDays" id="marginDays" value="{{ settings.marginDays }}" style="max-width: 120px">
+                        <div class="form-text">La livraison WS doit avoir lieu au moins N jours avant la date de ma version (0 = le jour même au plus tard).</div>
+                    </div>
+                    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
+                    {% if settings.configured %}<a href="{{ path('delivery') }}" class="btn btn-outline-secondary">Voir les livraisons</a>{% endif %}
+                </div>
+            </form>
+        </div>
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-eye"></i> Lecture de la page
+                    {% if calendar and calendar.pageUrl %}: <a href="{{ calendar.pageUrl }}" target="_blank" rel="noopener">{{ calendar.pageTitle }}</a>
+                        <span class="badge text-bg-secondary">{{ calendar.rows|length }} ligne(s)</span>{% endif %}
+                </div>
+                {% if calendar %}
+                    {{ include('delivery/_calendar.html.twig', {calendar: calendar}) }}
+                {% else %}
+                    <div class="card-body text-muted">Renseignez la page Confluence pour voir ce qui en est extrait.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
