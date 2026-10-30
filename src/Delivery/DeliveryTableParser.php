@@ -52,7 +52,15 @@ final class DeliveryTableParser
                         $others[$header] = $this->text($cells[$index]);
                     }
                 }
-                $rows[] = new DeliveryRow($i + 1, $dateCell ? $this->date($dateCell) : null, $rawDate, $lines, $others, VersionExtractor::extract(implode("\n", $lines)));
+                $rows[] = new DeliveryRow(
+                    $i + 1,
+                    $dateCell ? $this->date($dateCell) : null,
+                    $rawDate,
+                    $lines,
+                    $others,
+                    VersionExtractor::extract(implode("\n", $lines)),
+                    $versionCell ? $this->versionIds($versionCell) : [],
+                );
             }
 
             return ['rows' => $rows, 'headers' => $headers, 'error' => null, 'tables' => $tables->length];
@@ -135,16 +143,51 @@ final class DeliveryTableParser
         return null;
     }
 
+    /**
+     * Colonne dont l'en-tête correspond au libellé : identique en priorité, puis qui commence par le libellé,
+     * puis qui le contient (« Version » plutôt que « Leader de Version » ou « PV de version »).
+     */
     private function findColumn(array $headers, string $label): ?int
     {
         $label = self::fold($label);
+        if ('' === $label) {
+            return null;
+        }
+        $best = null;
+        $bestScore = 0;
         foreach ($headers as $index => $header) {
-            if ('' !== $label && str_contains(self::fold($header), $label)) {
-                return $index;
+            $header = self::fold($header);
+            $score = match (true) {
+                $header === $label => 3,
+                str_starts_with($header, $label) => 2,
+                str_contains($header, $label) => 1,
+                default => 0,
+            };
+            if ($score > $bestScore) {
+                [$best, $bestScore] = [$index, $score];
             }
         }
 
-        return null;
+        return $best;
+    }
+
+    /**
+     * Identifiants des versions Jira liées dans la cellule (liens vers …/versions/12345, fixforversion/12345…),
+     * avec le texte du lien.
+     *
+     * @return array<string, string> identifiant => texte du lien
+     */
+    private function versionIds(\DOMElement $cell): array
+    {
+        $ids = [];
+        foreach ($cell->getElementsByTagName('a') as $link) {
+            $href = $link->getAttribute('href');
+            if (preg_match('#(?:/versions/|fixforversion/|[?&]version=|[?&]versionId=)(\d+)#i', $href, $m)) {
+                $ids[$m[1]] = trim(preg_replace('/\s+/u', ' ', $link->textContent) ?? '');
+            }
+        }
+
+        return $ids;
     }
 
     private function date(\DOMElement $cell): ?\DateTimeImmutable

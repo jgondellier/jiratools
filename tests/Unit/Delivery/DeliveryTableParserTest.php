@@ -100,4 +100,45 @@ class DeliveryTableParserTest extends TestCase
         self::assertSame('2026-11-05', $calendar->dateOf('1.6.0')?->format('Y-m-d'));
         self::assertSame('2026-11-05', $calendar->dateOf('1.6.0', 'WS')?->format('Y-m-d'));
     }
+
+    /**
+     * Calendrier de type « Release Train » : colonnes « Leader de Version » et « PV de version »
+     * autour de « Version », versions en liens vers Jira, composant en deux mots, version à 4 niveaux.
+     */
+    public function testReleaseTrainPage(): void
+    {
+        $result = (new DeliveryTableParser())->parse(file_get_contents(__DIR__.'/../../fixtures/calendrier-release-train.html'));
+
+        self::assertNull($result['error']);
+        self::assertCount(1, $result['rows']);
+        $row = $result['rows'][0];
+
+        self::assertSame('2026-10-29', $row->date->format('Y-m-d'), 'macro date Confluence');
+        self::assertSame(
+            ['1.28.0 Batch AB', '4.68.0 WS', '4.54.0 WS-REF', '4.7.63.0 BDD', '4.39.0 GATEWAY', '1.0.0 WS-CLIENT'],
+            array_map(fn (array $e) => $e['version'].' '.$e['component'], $row->entries),
+            'colonne « Version » et non « Leader de Version »',
+        );
+        self::assertSame(['11001', '12001', '13001', '14001', '15001', '16001'], array_map('strval', array_keys($row->versionIds)));
+        self::assertArrayHasKey('Leader de Version', $row->otherCells);
+        self::assertArrayHasKey('PV de version', $row->otherCells);
+
+        $calendar = new DeliveryCalendar($result['rows']);
+        self::assertSame('2026-10-29', $calendar->dateOf('n\'importe quel nom', null, '12001')?->format('Y-m-d'), 'rapprochement par identifiant de version');
+        self::assertSame('2026-10-29', $calendar->dateOf('4.54.0 WS-REF')?->format('Y-m-d'), 'rapprochement par nom');
+        self::assertSame('2026-10-29', $calendar->dateOf('1.28.0 Batch AB')?->format('Y-m-d'), 'composant en deux mots');
+        self::assertSame('2026-10-29', $calendar->dateOf('4.7.63.0', 'BDD')?->format('Y-m-d'));
+        self::assertNull($calendar->dateOf('4.68.0', 'WS-REF'));
+        self::assertNull($calendar->dateOf('9.9.9', null, '99999'), 'identifiant inconnu, nom inconnu');
+    }
+
+    public function testHeaderPriority(): void
+    {
+        $page = '<table><tr><th>Leader de Version</th><th>Date prévue</th><th>Versions livrées</th><th>Date</th></tr>'
+            .'<tr><td>Alice</td><td>01/01/2026</td><td>1.0 WS</td><td>05/11/2026</td></tr></table>';
+        $result = (new DeliveryTableParser())->parse($page, 'Date', 'Version');
+
+        self::assertSame('2026-11-05', $result['rows'][0]->date->format('Y-m-d'), 'en-tête identique prioritaire');
+        self::assertSame(['1.0 WS'], $result['rows'][0]->versionLines, '« Versions livrées » commence par « Version »');
+    }
 }

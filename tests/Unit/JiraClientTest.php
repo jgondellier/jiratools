@@ -219,4 +219,21 @@ class JiraClientTest extends TestCase
         self::assertInstanceOf(AtlassianException::class, $results['ko']);
         self::assertCount(2, $urls);
     }
+
+    public function testBoardScope(): void
+    {
+        $urls = [];
+        $client = $this->client([
+            new MockResponse(json_encode(['id' => 42, 'name' => 'Board équipe', 'filter' => ['id' => '10500']])),
+            new MockResponse(json_encode(['values' => [['key' => 'APP'], ['key' => 'WS']], 'isLast' => true])),
+            new MockResponse(json_encode(['id' => '10500', 'jql' => 'project = APP OR (project = WS AND labels = equipe) ORDER BY Rank ASC'])),
+        ], 'cloud', 'me', $urls);
+
+        $scope = $client->getBoardScope(42);
+
+        self::assertSame('project = APP OR (project = WS AND labels = equipe)', $scope['jql'], 'tri retiré');
+        self::assertSame(['APP', 'WS'], $scope['projects']);
+        self::assertSame('Board équipe', $scope['name']);
+        self::assertStringContainsString('/rest/api/2/filter/10500', $urls[2]['url']);
+    }
 }

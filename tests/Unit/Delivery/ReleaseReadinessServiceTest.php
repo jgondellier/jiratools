@@ -3,6 +3,7 @@
 namespace App\Tests\Unit\Delivery;
 
 use App\Delivery\DeliveryCalendar;
+use App\Delivery\DeliveryScopeResolver;
 use App\Delivery\DeliverySettings;
 use App\Delivery\DeliveryTableParser;
 use App\Delivery\ReleaseReadiness;
@@ -60,21 +61,19 @@ class ReleaseReadinessServiceTest extends TestCase
         $jira->method('versionUrl')->willReturn('https://jira/v');
         $jira->method('searchMany')->willReturnCallback(function (array $searches) use ($issues) {
             $this->searches = $searches;
-            $result = [];
-            foreach ($searches as $key => $search) {
-                $ws = str_starts_with($key, 'ws');
-                $done = str_ends_with($key, '_done');
-                $result[$key] = array_values(array_filter($issues, fn (Issue $i) => ('WSC' === $i->projectKey) === $ws && $i->isDone() === $done));
-            }
 
-            return $result;
+            return [
+                'open' => array_values(array_filter($issues, fn (Issue $i) => !$i->isDone())),
+                'done' => array_values(array_filter($issues, fn (Issue $i) => $i->isDone())),
+            ];
         });
 
         $views = $this->createMock(IssueViewFactory::class);
         $views->method('create')->willReturnCallback(fn (Issue $i) => new IssueView($i, $ages[$i->key] ?? new StatusAge(0.5, StatusAge::OK, 3, 5), null));
 
         $calendar = new DeliveryCalendar((new DeliveryTableParser())->parse($calendarHtml ?: '<table><tr><th>Date</th><th>Version</th></tr></table>')['rows']);
-        $service = new ReleaseReadinessService(new DeliverySettings($repo), $jira, $views, new WorkingTime(false));
+        $settings = new DeliverySettings($repo);
+        $service = new ReleaseReadinessService($settings, new DeliveryScopeResolver($jira, $settings), $jira, $views, new WorkingTime(false));
         $releases = $service->getUpcoming([(new Project())->setJiraProjectKey('APP')], $calendar);
 
         $byName = [];
@@ -150,11 +149,13 @@ class ReleaseReadinessServiceTest extends TestCase
         self::assertSame(['new' => 1, 'indeterminate' => 3, 'done' => 1], $v10->getCounts());
         self::assertSame(100, $v10->getProgress(), 'seul le ticket terminé est estimé');
 
-        // Requêtes : mes versions avec le périmètre projet, WS avec l'étiquette
-        self::assertStringContainsString('fixVersion in (1, 2) AND ((project = "APP"))', $this->searches['mine_open'][0]);
-        self::assertStringContainsString('labels in ("ws-equipe")', $this->searches['ws_open'][0]);
-        self::assertTrue($this->searches['mine_open'][2], 'historique demandé pour les tickets non terminés');
-        self::assertFalse($this->searches['mine_done'][2]);
+        // Requête : mes projets + tickets WS portant l'étiquette (pas de board dans ce test)
+        self::assertStringStartsWith(
+            'fixVersion in (1, 2, 3) AND (((project = "APP")) OR (project in ("WSC") AND labels in ("ws-equipe"))) AND statusCategory != Done',
+            $this->searches['open'][0],
+        );
+        self::assertTrue($this->searches['open'][2], 'historique demandé pour les tickets non terminés');
+        self::assertFalse($this->searches['done'][2]);
     }
 
     public function testOverdueVersionFlagsOpenIssues(): void

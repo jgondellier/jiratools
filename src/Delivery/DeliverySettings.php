@@ -46,9 +46,10 @@ class DeliverySettings
         $this->values = $clean;
     }
 
+    /** Page du calendrier ou projets WS renseignés (les projets WS peuvent aussi venir du board) */
     public function isConfigured(): bool
     {
-        return [] !== $this->getWsProjects();
+        return null !== $this->getPageId() || [] !== $this->getWsProjects();
     }
 
     /** @return array<int, array{key: string, prefix: ?string}> */

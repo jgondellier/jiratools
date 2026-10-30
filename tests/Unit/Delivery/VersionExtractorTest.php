@@ -22,6 +22,9 @@ class VersionExtractorTest extends TestCase
         yield 'texte avant' => ['Livraison du 12.03 : 1.4.2 WS', ['12.03 ?', '1.4.2 WS']];
         yield 'numéro à 4 niveaux' => ['1.4.2.7 WS', ['1.4.2.7 WS']];
         yield 'doublon' => ['1.4.2 WS 1.4.2 WS', ['1.4.2 WS']];
+        yield 'composant en deux mots' => ['1.28.0 Batch AB (vérifier le post-déploiement le 19/10 - avant la release)', ['1.28.0 Batch AB']];
+        yield 'composants à deux mots enchaînés' => ['1.4.2 Batch AB 2.0.1 WS-REF', ['1.4.2 Batch AB', '2.0.1 WS-REF']];
+        yield 'version à 4 niveaux puis autre ligne' => ["4.7.63.0 BDD\n4.39.0 GATEWAY", ['4.7.63.0 BDD', '4.39.0 GATEWAY']];
         yield 'sans version' => ['à définir', []];
     }
 

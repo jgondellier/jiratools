@@ -11,7 +11,7 @@
                 <div class="card-body">
                     <input type="hidden" name="_token" value="{{ csrf_token('deliveries') }}">
                     <div class="mb-3">
-                        <label class="form-label" for="wsProjects">Projets Jira des web services</label>
+                        <label class="form-label" for="wsProjects">Projets Jira des web services <span class="text-muted">(détectés depuis le board, à compléter si besoin)</span></label>
                         <textarea class="form-control" name="wsProjects" id="wsProjects" rows="3" placeholder="WS = WS&#10;WSREF = WS-REF">{{ projects_text }}</textarea>
                         <div class="form-text">
                             Une clé de projet par ligne, suivie du <strong>nom du composant tel qu'écrit dans le calendrier</strong>
@@ -28,7 +28,7 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="wsLabels">Étiquette des tickets WS</label>
+                        <label class="form-label" for="wsLabels">Étiquette des tickets WS <span class="text-muted">(détectée depuis le filtre du board)</span></label>
                         <input class="form-control" name="wsLabels" id="wsLabels" value="{{ settings.wsLabels|join(', ') }}" placeholder="ex. : ws-mon-equipe">
                         <div class="form-text">
                             Étiquette Jira que vous ajoutez sur vos tickets dans les projets WS (plusieurs possibles, séparées par des virgules).
@@ -73,6 +73,23 @@
             </form>
         </div>
         <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-kanban"></i> Périmètre lu dans vos boards</div>
+                <div class="card-body small">
+                    {% for board in scope.boards %}
+                        <div class="mb-2"><strong>{{ board.name }}</strong> (board {{ board.id }}) : projets {{ board.projects|join(', ') }}
+                            <div><code>{{ board.jql }}</code></div></div>
+                    {% else %}
+                        <p class="text-muted mb-2">Aucun board lu : renseignez l'identifiant du board dans vos projets (Paramétrage → Projets).</p>
+                    {% endfor %}
+                    {% for error in scope.errors %}<div class="text-danger"><i class="bi bi-x-circle"></i> {{ error }}</div>{% endfor %}
+                    <hr>
+                    <div><strong>Mes projets :</strong> {{ scope.myKeys|join(', ') ?: '—' }}</div>
+                    <div><strong>Projets web services :</strong> {{ scope.wsKeys|join(', ') ?: '—' }}</div>
+                    <div><strong>Étiquette des tickets WS :</strong> {{ scope.labels|join(', ') ?: '—' }}</div>
+                    <p class="text-muted mb-0 mt-2">Les tickets WS suivis sont ceux du board. Les champs « projets » et « étiquette » à gauche ne servent qu'à compléter ce qui est détecté.</p>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header">
                     <i class="bi bi-eye"></i> Lecture de la page

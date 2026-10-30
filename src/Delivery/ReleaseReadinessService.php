@@ -8,7 +8,6 @@ use App\Jira\Issue;
 use App\Jira\JiraClient;
 use App\Service\IssueView;
 use App\Service\IssueViewFactory;
-use App\Service\ProjectScope;
 use App\Service\StatusAge;
 use App\Service\WorkingTime;
 
@@ -20,6 +19,7 @@ class ReleaseReadinessService
 {
     public function __construct(
         private readonly DeliverySettings $settings,
+        private readonly DeliveryScopeResolver $scopeResolver,
         private readonly JiraClient $jira,
         private readonly IssueViewFactory $views,
         private readonly WorkingTime $workingTime,
@@ -31,19 +31,18 @@ class ReleaseReadinessService
      *
      * @return ReleaseReadiness[] triées par date de livraison (sans date à la fin)
      */
-    public function getUpcoming(array $projects, DeliveryCalendar $calendar): array
+    public function getUpcoming(array $projects, DeliveryCalendar $calendar, ?DeliveryScope $scope = null): array
     {
-        $myKeys = ProjectScope::jiraKeys($projects);
-        $wsKeys = array_values(array_diff($this->settings->getWsKeys(), $myKeys));
-        if ([] === $myKeys) {
+        $scope ??= $this->scopeResolver->resolve($projects);
+        if ($scope->isEmpty()) {
             return [];
         }
 
-        $releases = $this->selectVersions(array_merge($myKeys, $wsKeys), $wsKeys, $calendar);
+        $releases = $this->selectVersions(array_merge($scope->myKeys, $scope->wsKeys), $scope->wsKeys, $calendar);
         if ([] === $releases) {
             return [];
         }
-        $this->loadIssues($releases, $projects, $myKeys, $wsKeys);
+        $this->loadIssues($releases, $scope);
         $this->evaluate($releases);
 
         $list = array_values($releases);
@@ -68,7 +67,7 @@ class ReleaseReadinessService
                 if ($v['released'] || $v['archived']) {
                     continue;
                 }
-                $confluenceDate = $calendar->error ? null : $calendar->dateOf($v['name'], $prefix);
+                $confluenceDate = $calendar->error ? null : $calendar->dateOf($v['name'], $prefix, $v['id']);
                 $date = $confluenceDate ?? $v['releaseDate'];
                 if ($date && $date > $horizon) {
                     continue;
@@ -80,7 +79,7 @@ class ReleaseReadinessService
                     isWs: \in_array($projectKey, $wsKeys, true),
                     jiraDate: $v['releaseDate'],
                     confluenceDate: $confluenceDate,
-                    inConfluence: !$calendar->error && [] !== $calendar->find($v['name'], $prefix),
+                    inConfluence: !$calendar->error && [] !== $calendar->find($v['name'], $prefix, $v['id']),
                     otherComponents: $calendar->error ? [] : $calendar->componentsForNumber($v['name'], $prefix),
                     daysLeft: $date ? $this->workingTime->remainingDays($date) : null,
                     url: $this->jira->versionUrl($projectKey, $v['id']),
@@ -92,36 +91,23 @@ class ReleaseReadinessService
     }
 
     /**
-     * Tickets des versions retenues, en un seul lot de recherches. L'historique (pour la durée dans le statut)
-     * n'est demandé que pour les tickets non terminés.
+     * Tickets des versions retenues, dans le périmètre du board (mon projet + tickets WS du board),
+     * en un seul lot de recherches. L'historique (pour la durée dans le statut) n'est demandé que pour
+     * les tickets non terminés.
      *
      * @param array<string, ReleaseReadiness> $releases
-     * @param Project[]                       $projects
      */
-    private function loadIssues(array $releases, array $projects, array $myKeys, array $wsKeys): void
+    private function loadIssues(array $releases, DeliveryScope $scope): void
     {
-        $ids = ['mine' => [], 'ws' => []];
-        foreach ($releases as $release) {
-            $ids[$release->isWs ? 'ws' : 'mine'][] = $release->versionId;
-        }
+        $ids = array_map(fn (ReleaseReadiness $r) => $r->versionId, array_values($releases));
+        $jql = sprintf('fixVersion in (%s) AND %s', implode(', ', $ids), $scope->issuesJql());
 
-        $base = [];
-        if ([] !== $ids['mine']) {
-            $base['mine'] = sprintf('fixVersion in (%s) AND %s', implode(', ', $ids['mine']), ProjectScope::jqlForAll($projects));
-        }
-        if ([] !== $ids['ws']) {
-            $labels = $this->settings->getWsLabels();
-            $base['ws'] = sprintf('project in (%s) AND fixVersion in (%s)', JiraClient::quoteList($wsKeys), implode(', ', $ids['ws']))
-                .([] !== $labels ? ' AND labels in ('.JiraClient::quoteList($labels).')' : '');
-        }
+        $results = $this->jira->searchMany([
+            'open' => ["$jql AND statusCategory != Done ORDER BY key ASC", 2000, true, ['issuelinks']],
+            'done' => ["$jql AND statusCategory = Done ORDER BY key ASC", 2000, false],
+        ]);
 
-        $searches = [];
-        foreach ($base as $key => $jql) {
-            $searches[$key.'_open'] = ["$jql AND statusCategory != Done ORDER BY key ASC", 1000, true, ['issuelinks']];
-            $searches[$key.'_done'] = ["$jql AND statusCategory = Done ORDER BY key ASC", 1000, false];
-        }
-
-        foreach ($this->jira->searchMany($searches) as $result) {
+        foreach ($results as $result) {
             if ($result instanceof AtlassianException) {
                 throw $result;
             }

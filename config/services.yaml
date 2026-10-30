@@ -22,7 +22,7 @@ services:
             - '../src/Jira/Sprint.php'
             - '../src/Confluence/ConfluencePageInfo.php'
             - '../src/Service/{IssueView,StatusAge,SprintReport,DeveloperActivity}.php'
-            - '../src/Delivery/{DeliveryRow,DeliveryCalendar,DeliveryCheck,DateParser,ReleaseReadiness}.php'
+            - '../src/Delivery/{DeliveryRow,DeliveryCalendar,DeliveryCheck,DateParser,ReleaseReadiness,DeliveryScope}.php'
 
     # --- Connexions Atlassian -------------------------------------------------
     app.jira_http:

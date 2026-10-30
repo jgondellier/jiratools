@@ -5,6 +5,7 @@ namespace App\Tests\Unit\Delivery;
 use App\Confluence\ConfluenceClient;
 use App\Confluence\ConfluencePageInfo;
 use App\Delivery\DeliveryCheck;
+use App\Delivery\DeliveryScopeResolver;
 use App\Delivery\DeliveryService;
 use App\Delivery\DeliverySettings;
 use App\Delivery\DeliveryTableParser;
@@ -73,7 +74,9 @@ class DeliveryServiceTest extends TestCase
         $developers = $this->createMock(DeveloperRepository::class);
         $developers->method('findBy')->willReturn([]);
 
-        return new DeliveryService(new DeliverySettings($settingRepo), $jira, $confluence, $sprints, $developers, new DeliveryTableParser());
+        $settings = new DeliverySettings($settingRepo);
+
+        return new DeliveryService($settings, $jira, $confluence, $sprints, $developers, new DeliveryTableParser(), new DeliveryScopeResolver($jira, $settings));
     }
 
     private static function messages(DeliveryCheck $check): string
@@ -175,7 +178,7 @@ class DeliveryServiceTest extends TestCase
             $checks[$check->issue->key] = $check;
         }
         self::assertSame(DeliveryCheck::OK, $checks['APP-1']->getLevel(), 'étiquette reconnue sans tenir compte de la casse');
-        self::assertStringContainsString('n\'a pas l\'étiquette ws-equipe', self::messages($checks['APP-2']));
+        self::assertStringContainsString('n\'a pas l\'étiquette ws-equipe (il n\'apparaît pas sur le board)', self::messages($checks['APP-2']));
 
         self::assertSame(['WSC-8'], array_map(fn (Issue $i) => $i->key, $report['unlinked']));
 

@@ -22,15 +22,24 @@ final class DeliveryCalendar
     /**
      * Lignes qui citent la version, par date croissante.
      *
-     * La version Jira est décomposée en numéro + composant (« 1.4.2 WS », « WS-REF 2.0.1 ») ; si elle ne porte
+     * Si la cellule contient un lien vers la version Jira, l'identifiant de version suffit.
+     * Sinon, la version Jira est décomposée en numéro + composant (« 1.4.2 WS », « WS-REF 2.0.1 ») ; si elle ne porte
      * que le numéro (« 1.4.2 »), le composant paramétré pour son projet est utilisé. Le numéro doit être
      * identique (« 1.4 » ≠ « 1.4.2 ») et le composant aussi (« WS » ≠ « WS-REF », « 1.4.2 » ≠ « 1.4.2 WS »),
      * sans tenir compte de la casse.
      *
      * @return DeliveryRow[]
      */
-    public function find(string $versionName, ?string $component = null): array
+    public function find(string $versionName, ?string $component = null, ?string $versionId = null): array
     {
+        // Lien vers la version Jira dans la cellule : rapprochement exact par identifiant
+        if (null !== $versionId && '' !== $versionId) {
+            $byId = array_values(array_filter($this->rows, fn (DeliveryRow $row) => isset($row->versionIds[$versionId])));
+            if ([] !== $byId) {
+                return self::sortByDate($byId);
+            }
+        }
+
         $wanted = self::wanted($versionName, $component);
         if (null === $wanted) {
             return $this->findText($versionName, $component);
@@ -160,9 +169,9 @@ final class DeliveryCalendar
     }
 
     /** Date de livraison d'une version (première ligne datée qui la cite) */
-    public function dateOf(string $versionName, ?string $component = null): ?\DateTimeImmutable
+    public function dateOf(string $versionName, ?string $component = null, ?string $versionId = null): ?\DateTimeImmutable
     {
-        foreach ($this->find($versionName, $component) as $row) {
+        foreach ($this->find($versionName, $component, $versionId) as $row) {
             if ($row->date) {
                 return $row->date;
             }

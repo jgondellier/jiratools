@@ -21,6 +21,8 @@ class DeliveryService
 {
     private const LINK_FIELDS = ['issuelinks'];
 
+    private ?DeliveryScope $scope = null;
+
     public function __construct(
         private readonly DeliverySettings $settings,
         private readonly JiraClient $jira,
@@ -28,6 +30,7 @@ class DeliveryService
         private readonly SprintService $sprints,
         private readonly DeveloperRepository $developers,
         private readonly DeliveryTableParser $parser,
+        private readonly DeliveryScopeResolver $scopeResolver,
     ) {
     }
 
@@ -58,13 +61,15 @@ class DeliveryService
      *     myVersionsWithoutDate: string[]
      * }
      */
-    public function getReport(array $projects, ?DeliveryCalendar $calendar = null): array
+    public function getReport(array $projects, ?DeliveryCalendar $calendar = null, ?DeliveryScope $deliveryScope = null): array
     {
         $calendar ??= $this->getCalendar();
-        $wsKeys = $this->settings->getWsKeys();
-        $scope = ProjectScope::jqlForAll($projects);
-        $myKeys = ProjectScope::jiraKeys($projects);
-        if (!$scope || [] === $wsKeys) {
+        $deliveryScope ??= $this->scopeResolver->resolve($projects);
+        $this->scope = $deliveryScope;
+        $wsKeys = $deliveryScope->wsKeys;
+        $scope = $deliveryScope->myJql;
+        $myKeys = $deliveryScope->myKeys;
+        if ($deliveryScope->isEmpty() || [] === $wsKeys) {
             return ['calendar' => $calendar, 'checks' => [], 'versions' => [], 'unlinked' => [], 'myVersionsWithoutDate' => []];
         }
 
@@ -74,7 +79,7 @@ class DeliveryService
                 "$scope AND (fixVersion in unreleasedVersions() OR (fixVersion is EMPTY AND statusCategory != Done) OR resolved >= -30d) ORDER BY key ASC",
                 2000, false, self::LINK_FIELDS,
             ],
-            'ws' => [$this->wsInProgressJql($wsKeys, $projects), 1000, false, self::LINK_FIELDS],
+            'ws' => [$this->wsTrackedJql($deliveryScope, $projects), 1000, false, self::LINK_FIELDS],
         ];
         $results = $this->jira->searchMany($searches);
         foreach ($results as $result) {
@@ -119,7 +124,7 @@ class DeliveryService
         }
         usort($checks, fn (DeliveryCheck $a, DeliveryCheck $b) => [$a->myDate === null, $a->myDate, $a->myVersion, $a->issue->key] <=> [$b->myDate === null, $b->myDate, $b->myVersion, $b->issue->key]);
 
-        // Tickets WS suivis (étiquetés) non terminés, sans lien vers un ticket de mes projets
+        // Tickets WS suivis (board / étiquette) non terminés, sans lien vers un ticket de mes projets
         $unlinked = array_values(array_filter($tracked, fn (Issue $ws) => !$ws->isDone()
             && [] === array_filter($ws->links, fn (array $l) => \in_array($l['projectKey'], $myKeys, true))));
 
@@ -153,12 +158,12 @@ class DeliveryService
         $wsDate = null;
         foreach ($ws->versionDetails as $v) {
             $prefix = $this->settings->getPrefix($ws->projectKey);
-            $confluenceDate = $calendar->dateOf($v['name'], $prefix);
+            $confluenceDate = $calendar->dateOf($v['name'], $prefix, $v['id'] ?? null);
             $wsVersions[] = [
                 'name' => $v['name'],
                 'jiraDate' => $v['releaseDate'],
                 'confluenceDate' => $confluenceDate,
-                'inConfluence' => [] !== $calendar->find($v['name'], $prefix),
+                'inConfluence' => [] !== $calendar->find($v['name'], $prefix, $v['id'] ?? null),
                 'otherComponents' => $calendar->componentsForNumber($v['name'], $prefix),
             ];
             $date = $confluenceDate ?? $v['releaseDate'];
@@ -169,8 +174,8 @@ class DeliveryService
 
         $check = new DeliveryCheck($issue, $myDate, $myVersion, $ws, $linkType, $wsVersions, $wsDate);
 
-        if ([] !== $this->settings->getWsLabels() && !$this->settings->hasWsLabel($ws->labels)) {
-            $check->add(DeliveryCheck::WARNING, sprintf('Le ticket WS n\'a pas l\'étiquette %s.', implode(' / ', $this->settings->getWsLabels())));
+        if ($this->scope && [] !== $this->scope->labels && !$this->scope->hasWsLabel($ws->labels)) {
+            $check->add(DeliveryCheck::WARNING, sprintf('Le ticket WS n\'a pas l\'étiquette %s (il n\'apparaît pas sur le board).', implode(' / ', $this->scope->labels)));
         }
 
         if (!$myVersion) {
@@ -240,8 +245,8 @@ class DeliveryService
                 continue;
             }
             $prefix = $this->settings->getPrefix($v['projectKey']);
-            $rows = $calendar->find($v['name'], $prefix);
-            $confluenceDate = $calendar->dateOf($v['name'], $prefix);
+            $rows = $calendar->find($v['name'], $prefix, $v['id'] ?? null);
+            $confluenceDate = $calendar->dateOf($v['name'], $prefix, $v['id'] ?? null);
             [$level, $message] = match (true) {
                 null !== $calendar->error => ['secondary', null],
                 [] === $rows => ['warning', 'Absente du calendrier Confluence'.self::componentsHint($calendar->componentsForNumber($v['name'], $prefix), $v['projectKey'])],
@@ -268,20 +273,17 @@ class DeliveryService
     }
 
     /**
-     * Tickets WS suivis : ceux portant l'étiquette WS (non terminés ou résolus depuis moins de 30 jours) ;
-     * sans étiquette paramétrée, les tickets WS non terminés assignés à un membre suivi ou dans un sprint actif.
+     * Tickets WS suivis : ceux du board (ou portant l'étiquette), non terminés ou résolus depuis moins de 30 jours ;
+     * à défaut, les tickets WS non terminés assignés à un membre suivi ou dans un sprint actif.
      *
      * @param Project[] $projects
      */
-    private function wsInProgressJql(array $wsKeys, array $projects): string
+    private function wsTrackedJql(DeliveryScope $deliveryScope, array $projects): string
     {
-        if ([] !== $labels = $this->settings->getWsLabels()) {
-            return sprintf(
-                'project in (%s) AND labels in (%s) AND (statusCategory != Done OR resolved >= -30d) ORDER BY key ASC',
-                JiraClient::quoteList($wsKeys),
-                JiraClient::quoteList($labels),
-            );
+        if ($tracked = $deliveryScope->wsTrackedJql()) {
+            return "$tracked AND (statusCategory != Done OR resolved >= -30d) ORDER BY key ASC";
         }
+        $wsKeys = $deliveryScope->wsKeys;
 
         $conditions = [];
         $members = array_map(fn ($d) => $d->getJiraAccountId(), $this->developers->findBy(['active' => true]));

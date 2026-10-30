@@ -17,7 +17,7 @@ final class Issue
      * @param string[] $fixVersions
      * @param string[] $sprints
      * @param int[]    $sprintIds
-     * @param array<int, array{name: string, releaseDate: ?\DateTimeImmutable, released: bool}> $versionDetails
+     * @param array<int, array{id?: string, name: string, releaseDate: ?\DateTimeImmutable, released: bool}> $versionDetails
      * @param array<int, array{key: string, summary: string, status: string, statusCategory: string, projectKey: string, type: string}> $links
      */
     public function __construct(

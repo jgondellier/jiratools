@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Delivery\DeliveryCheck;
 use App\Delivery\DeliveryService;
+use App\Delivery\DeliveryScopeResolver;
 use App\Delivery\DeliverySettings;
 use App\Delivery\ReleaseReadiness;
 use App\Delivery\ReleaseReadinessService;
@@ -25,12 +26,13 @@ class DeliveryController extends AbstractController
         DeliverySettings $settings,
         DeliveryService $deliveries,
         ReleaseReadinessService $readiness,
+        DeliveryScopeResolver $scopeResolver,
         ProjectRepository $projectRepository,
         JiraClient $jira,
     ): Response
     {
         if (!$settings->isConfigured()) {
-            $this->addFlash('info', 'Indiquez d\'abord les projets Jira des web services et la page Confluence du calendrier des livraisons.');
+            $this->addFlash('info', 'Indiquez d\'abord la page Confluence du calendrier des livraisons.');
 
             return $this->redirectToRoute('admin_deliveries');
         }
@@ -41,8 +43,9 @@ class DeliveryController extends AbstractController
         $onlyProblems = $request->query->getBoolean('problems');
 
         $calendar = $deliveries->getCalendar();
-        $releases = $readiness->getUpcoming($projects, $calendar);
-        $report = $deliveries->getReport($projects, $calendar);
+        $scope = $scopeResolver->resolve($projects);
+        $releases = $readiness->getUpcoming($projects, $calendar, $scope);
+        $report = $deliveries->getReport($projects, $calendar, $scope);
 
         $counts = [DeliveryCheck::ERROR => 0, DeliveryCheck::WARNING => 0, DeliveryCheck::OK => 0];
         foreach ($report['checks'] as $check) {
@@ -64,6 +67,7 @@ class DeliveryController extends AbstractController
             'by_version' => $byVersion,
             'counts' => $counts,
             'settings' => $settings,
+            'scope' => $scope,
             'jira_browse' => rtrim($jira->browseUrl('X'), 'X'),
             'releases' => $onlyProblems ? array_values(array_filter($releases, fn (ReleaseReadiness $r) => ReleaseReadiness::OK !== $r->getLevel())) : $releases,
             'release_stats' => [

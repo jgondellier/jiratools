@@ -345,6 +345,61 @@ class JiraClient
     }
 
     /**
+     * Périmètre d'un board : requête JQL de son filtre (sans le tri) et projets qu'il affiche.
+     * Ex. : project = APP OR (project = WS AND labels = mon-equipe).
+     *
+     * @return array{id: int, name: string, jql: string, projects: string[]}
+     */
+    public function getBoardScope(int $boardId): array
+    {
+        $results = $this->jiraHttp->getMany([
+            'config' => [sprintf('rest/agile/1.0/board/%d/configuration', $boardId), [], 3600],
+            'projects' => [sprintf('rest/agile/1.0/board/%d/project', $boardId), ['maxResults' => 50], 3600],
+        ]);
+        foreach ($results as $result) {
+            if ($result instanceof AtlassianException) {
+                throw $result;
+            }
+        }
+        $filterId = $results['config']['filter']['id'] ?? null;
+        if (!$filterId) {
+            throw new AtlassianException(sprintf('Board %d : filtre introuvable.', $boardId));
+        }
+        $filter = $this->jiraHttp->get(sprintf('rest/api/2/filter/%s', rawurlencode((string) $filterId)), [], 3600);
+
+        return [
+            'id' => $boardId,
+            'name' => (string) ($results['config']['name'] ?? 'Board '.$boardId),
+            'jql' => trim(preg_replace('/\s+ORDER\s+BY\s+.*$/is', '', (string) ($filter['jql'] ?? '')) ?? ''),
+            'projects' => array_values(array_filter(array_map(fn (array $p) => (string) ($p['key'] ?? ''), $results['projects']['values'] ?? []))),
+        ];
+    }
+
+    /**
+     * Étiquettes citées dans une JQL (labels = x, labels in (x, y)).
+     *
+     * @return string[]
+     */
+    public static function labelsInJql(string $jql): array
+    {
+        $labels = [];
+        if (preg_match_all('/\blabels\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s)]+))/i', $jql, $m, PREG_SET_ORDER)) {
+            foreach ($m as $match) {
+                $labels[] = $match[1] ?: ($match[2] ?? '') ?: ($match[3] ?? '');
+            }
+        }
+        if (preg_match_all('/\blabels\s+in\s*\(([^)]*)\)/i', $jql, $m)) {
+            foreach ($m[1] as $list) {
+                foreach (explode(',', $list) as $label) {
+                    $labels[] = trim($label, " \t\"'");
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($labels)));
+    }
+
+    /**
      * Versions d'un projet Jira avec leur date de livraison.
      *
      * @return array<int, array{id: string, name: string, released: bool, archived: bool, releaseDate: ?\DateTimeImmutable, projectKey: string}>
@@ -455,6 +510,7 @@ class JiraClient
             labels: array_map('strval', (array) ($f['labels'] ?? [])),
             fixVersions: array_map(fn ($v) => (string) $v['name'], (array) ($f['fixVersions'] ?? [])),
             versionDetails: array_map(fn ($v) => [
+                'id' => (string) ($v['id'] ?? ''),
                 'name' => (string) $v['name'],
                 'releaseDate' => self::day($v['releaseDate'] ?? null),
                 'released' => (bool) ($v['released'] ?? false),

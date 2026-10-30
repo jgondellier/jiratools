@@ -2,7 +2,9 @@
 
 namespace App\Controller\Admin;
 
+use App\Delivery\DeliveryScopeResolver;
 use App\Delivery\DeliveryService;
+use App\Repository\ProjectRepository;
 use App\Delivery\DeliverySettings;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -12,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class DeliverySettingsController extends AbstractController
 {
     #[Route('/parametrage/livraisons', name: 'admin_deliveries', methods: ['GET', 'POST'])]
-    public function index(Request $request, DeliverySettings $settings, DeliveryService $deliveries): Response
+    public function index(Request $request, DeliverySettings $settings, DeliveryService $deliveries, DeliveryScopeResolver $scopeResolver, ProjectRepository $projects): Response
     {
         if ($request->isMethod('POST') && $this->isCsrfTokenValid('deliveries', (string) $request->request->get('_token'))) {
             $settings->save([
@@ -44,6 +46,8 @@ class DeliverySettingsController extends AbstractController
             'my_components_text' => DeliverySettings::formatProjects($settings->getMyComponents()),
             // Aperçu de la lecture du calendrier, pour valider le paramétrage
             'calendar' => $settings->getPageId() ? $deliveries->getCalendar() : null,
+            // Périmètre déduit des boards de mes projets
+            'scope' => $scopeResolver->resolve($projects->findBy(['active' => true])),
         ]);
     }
 }
