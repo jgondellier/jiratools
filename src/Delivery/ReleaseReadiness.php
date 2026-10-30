@@ -23,6 +23,9 @@ final class ReleaseReadiness
     /** @var array<int, array{level: string, message: string}> alertes sur la version elle-même */
     public array $alerts = [];
 
+    /** @var array<string, array<int, array{issue: Issue, version: ?string, date: ?\DateTimeImmutable}>> ticket WS => mes tickets qui en dépendent */
+    public array $requiredBy = [];
+
     public function __construct(
         public readonly string $projectKey,
         public readonly string $versionId,
@@ -39,31 +42,42 @@ final class ReleaseReadiness
     ) {
     }
 
-    /** Date de livraison retenue : Confluence (référence), sinon Jira */
+    /** Date de livraison retenue : date de publication Jira (prioritaire), sinon calendrier Confluence */
     public function getDate(): ?\DateTimeImmutable
     {
-        return $this->confluenceDate ?? $this->jiraDate;
+        return $this->jiraDate ?? $this->confluenceDate;
+    }
+
+    /** Les deux dates existent et diffèrent */
+    public function hasDateGap(): bool
+    {
+        return $this->jiraDate && $this->confluenceDate && $this->jiraDate->format('Y-m-d') !== $this->confluenceDate->format('Y-m-d');
     }
 
     /** Explication de la date affichée */
     public function getDateSourceLabel(): string
     {
-        if ($this->confluenceDate && $this->source) {
+        $confluence = null;
+        if ($this->source) {
             $row = $this->source['row'];
             $how = match ($this->source['method']) {
                 'link' => sprintf('lien vers la version Jira « %s »', $this->source['linkText']),
                 'name' => 'nom de la version',
                 default => 'texte de la cellule',
             };
-
-            return sprintf('Calendrier Confluence, ligne %d (« %s » ; %s)%s', $row->number, $row->rawDate, $how,
-                $this->jiraDate ? ' — date Jira : '.$this->jiraDate->format('d/m/Y') : ' — pas de date dans Jira');
-        }
-        if ($this->source) {
-            return sprintf('Trouvée dans le calendrier Confluence (ligne %d) mais date illisible (« %s ») : date Jira utilisée.', $this->source['row']->number, $this->source['rawDate'] ?? $this->source['row']->rawDate);
+            $confluence = $this->confluenceDate
+                ? sprintf('Confluence ligne %d : %s (%s)', $row->number, $this->confluenceDate->format('d/m/Y'), $how)
+                : sprintf('Confluence ligne %d : date illisible (« %s »)', $row->number, $row->rawDate);
         }
 
-        return $this->jiraDate ? 'Date de la version dans Jira (absente du calendrier Confluence)' : 'Aucune date';
+        if ($this->jiraDate) {
+            return 'Date de publication Jira'.($confluence ? ' — '.$confluence : ' — absente du calendrier Confluence');
+        }
+        if ($this->confluenceDate) {
+            return 'Pas de date dans Jira — '.$confluence;
+        }
+
+        return 'Aucune date'.($confluence ? ' — '.$confluence : '');
     }
 
     public function isOverdue(): bool

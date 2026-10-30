@@ -119,8 +119,8 @@ class DeliveryServiceTest extends TestCase
 
         self::assertSame(DeliveryCheck::ERROR, $checks['APP-2']->getLevel());
         self::assertStringContainsString('APRÈS ma version', self::messages($checks['APP-2']));
-        self::assertStringContainsString('date Jira 10/12/2026 ≠ date Confluence 12/12/2026', self::messages($checks['APP-2']));
-        self::assertSame('2026-12-12', $checks['APP-2']->wsDate->format('Y-m-d'), 'la date Confluence fait foi');
+        self::assertStringContainsString('Écart de date pour la version WS « 1.5.0 » : Jira 10/12/2026 ≠ Confluence 12/12/2026', self::messages($checks['APP-2']));
+        self::assertSame('2026-12-10', $checks['APP-2']->wsDate->format('Y-m-d'), 'la date de publication Jira est prioritaire');
 
         self::assertSame(DeliveryCheck::ERROR, $checks['APP-3']->getLevel());
         self::assertStringContainsString('pas de version', self::messages($checks['APP-3']));

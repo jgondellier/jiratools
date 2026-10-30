@@ -15,19 +15,24 @@
                     <div class="text-nowrap">
                         {% if release.date %}
                             <i class="bi bi-calendar-event"></i> {{ release.date|date('d/m/Y') }}
+                            {% if release.hasDateGap %}
+                                <span class="badge text-bg-danger" title="Date de publication Jira {{ release.jiraDate|date('d/m/Y') }} ≠ calendrier Confluence {{ release.confluenceDate|date('d/m/Y') }} : date Jira retenue">
+                                    <i class="bi bi-exclamation-octagon-fill"></i> Confluence : {{ release.confluenceDate|date('d/m/Y') }}
+                                </span>
+                            {% endif %}
                             {% if release.overdue %}
                                 <span class="badge text-bg-danger">en retard</span>
                             {% else %}
                                 <span class="badge {{ release.daysLeft <= settings.startDays ? 'text-bg-danger' : (release.daysLeft <= 2 * settings.startDays ? 'text-bg-warning' : 'text-bg-secondary') }}" title="Jours ouvrés restants, aujourd'hui inclus">J-{{ release.daysLeft }}</span>
                             {% endif %}
-                            <span class="small text-muted" title="{{ release.dateSourceLabel }}">{{ release.confluenceDate ? 'Confluence' : 'Jira' }} <i class="bi bi-info-circle"></i></span>
+                            <span class="small text-muted" title="{{ release.dateSourceLabel }}">{{ release.jiraDate ? 'Jira' : 'Confluence' }} <i class="bi bi-info-circle"></i></span>
                         {% else %}
                             <span class="badge text-bg-warning">sans date</span>
                         {% endif %}
                     </div>
                 </div>
                 <div class="card-body">
-                    <div class="small text-muted mb-2"><i class="bi bi-signpost"></i> {{ release.dateSourceLabel }}</div>
+                    <div class="small mb-2 {{ release.hasDateGap ? 'date-gap' : 'text-muted' }}"><i class="bi bi-signpost"></i> {{ release.dateSourceLabel }}</div>
                     {% if release.total == 0 %}
                         <p class="text-muted small mb-2">Aucun ticket dans cette version{{ release.isWs and settings.wsLabels ? ' (avec l\'étiquette ' ~ settings.wsLabels|join(', ') ~ ')' }}.</p>
                     {% else %}
@@ -69,6 +74,12 @@
                                         </td>
                                         <td>
                                             {{ issue.summary }}
+                                            {% for dependent in release.requiredBy[issue.key] ?? [] %}
+                                                <div class="text-muted"><i class="bi bi-arrow-return-right"></i> requis par
+                                                    <a href="{{ dependent.issue.url }}" target="_blank" rel="noopener">{{ dependent.issue.key }}</a>
+                                                    {%- if dependent.version %} ({{ dependent.version }}{% if dependent.date %} · {{ dependent.date|date('d/m/Y') }}{% endif %}){% endif %}
+                                                </div>
+                                            {% endfor %}
                                             {% for alert in release.issueAlerts[issue.key] ?? [] %}
                                                 <div class="{{ alert.level == 'error' ? 'text-danger' : 'text-warning-emphasis' }}">{{ alert.message }}</div>
                                             {% endfor %}
@@ -86,7 +97,7 @@
         </div>
     {% else %}
         <div class="col"><div class="alert alert-light border mb-0">
-            {{ only_problems ? 'Aucune version à risque 👍' : 'Aucune version non livrée impactée par vos tickets dans les ' ~ settings.horizonDays ~ ' prochains jours.' }}
+            {{ only_problems ? 'Aucune version à risque 👍' : 'Aucune version web services non livrée dont dépendent vos tickets dans les ' ~ settings.horizonDays ~ ' prochains jours.' }}
         </div></div>
     {% endfor %}
 </div>

@@ -28,7 +28,7 @@
     <div class="row g-3 mb-3">
         <div class="col-6 col-md">
             <div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-box-seam"></i> Versions impactées ({{ settings.horizonDays }} j)</div><div class="display-6">{{ release_stats.count }}</div>
+                <div class="small"><i class="bi bi-box-seam"></i> Versions WS concernées ({{ settings.horizonDays }} j)</div><div class="display-6">{{ release_stats.count }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
@@ -39,6 +39,11 @@
         <div class="col-6 col-md">
             <div class="card stat-card h-100 {{ release_stats.issuesInError ? 'border-danger text-danger' }}"><div class="card-body py-2">
                 <div class="small"><i class="bi bi-hourglass-bottom"></i> Tickets à risque</div><div class="display-6">{{ release_stats.issuesInError }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ release_stats.dateGaps ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-calendar-x"></i> Écarts de date Jira / Confluence</div><div class="display-6">{{ release_stats.dateGaps }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
@@ -58,8 +63,8 @@
             Les dates Jira des versions WS sont utilisées à la place. <a href="{{ path('admin_deliveries') }}">Paramétrage</a></div>
     {% endif %}
 
-    <h2 class="h5 mb-3"><i class="bi bi-box-seam"></i> Versions impactées par mes tickets
-        <small class="text-muted fw-normal">— versions de mes tickets ({{ scope.myKeys|join(', ') }}, avec leurs composants) et des tickets WS qui leur sont liés ; date Confluence, sinon Jira</small></h2>
+    <h2 class="h5 mb-3"><i class="bi bi-box-seam"></i> Versions web services dont dépendent mes tickets
+        <small class="text-muted fw-normal">— versions du projet {{ scope.wsKeys|join(', ') }} des tickets WS liés à mes tickets ({{ scope.myKeys|join(', ') }}, avec leurs composants) ; date de publication Jira, sinon Confluence</small></h2>
     {{ include('delivery/_releases.html.twig') }}
 
     <h2 class="h5 mb-3"><i class="bi bi-diagram-3"></i> Dépendances et cohérence</h2>
@@ -68,7 +73,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-diagram-3"></i> Mes tickets liés à des web services</span>
             <span class="small text-muted">
-                Règle : la livraison WS (date Confluence, sinon Jira) doit précéder ma version
+                Règle : la livraison WS (date de publication Jira, sinon Confluence) doit précéder ma version
                 {% if settings.marginDays > 0 %}d'au moins {{ settings.marginDays }} jour(s){% endif %}.
             </span>
         </div>

@@ -74,6 +74,7 @@ class DeliveryController extends AbstractController
                 'count' => \count($releases),
                 'atRisk' => \count(array_filter($releases, fn (ReleaseReadiness $r) => ReleaseReadiness::ERROR === $r->getLevel())),
                 'issuesInError' => array_sum(array_map(fn (ReleaseReadiness $r) => $r->countIssuesInAlert(ReleaseReadiness::ERROR), $releases)),
+                'dateGaps' => \count(array_filter($releases, fn (ReleaseReadiness $r) => $r->hasDateGap())),
             ],
             'version_problems' => \count(array_filter($report['versions'], fn ($v) => \in_array($v['level'], ['warning', 'danger'], true))),
         ]);

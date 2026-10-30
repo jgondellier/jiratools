@@ -12,9 +12,12 @@ use App\Service\StatusAge;
 use App\Service\WorkingTime;
 
 /**
- * Dépendances livraison : versions non livrées impactées par les tickets de mes projets (projet + composants)
- * et versions des tickets WS qui leur sont liés, avec tout ce qui menace la date (tickets non commencés,
- * bloqués, non assignés, qui traînent, dépendances WS livrées trop tard).
+ * Dépendances livraison : versions non livrées du projet web services portées par les tickets WS liés
+ * aux tickets de mes projets (projet + composants), avec tout ce qui menace la date : tickets WS non
+ * commencés, bloqués, non assignés, qui traînent, ou livrés après la version de mes tickets qui en dépendent.
+ *
+ * Date d'une version WS : date de publication Jira, à défaut celle du calendrier Confluence ; un écart
+ * entre les deux est mis en évidence.
  */
 class ReleaseReadinessService
 {
@@ -56,18 +59,30 @@ class ReleaseReadinessService
             $ws += $this->searchSplit(['ws'.$i => 'key in ('.implode(', ', $chunk).')']);
         }
 
-        // 3) Versions impactées : versions non livrées de ces tickets (mes projets / projets WS)
+        // 3) Versions impactées : versions non livrées des tickets WS liés (projet web services uniquement)
         $releases = [];
         $issuesByRelease = [];
-        foreach ([[$mine, false], [$ws, true]] as [$issues, $isWs]) {
-            foreach ($issues as $issue) {
-                foreach ($issue->versionDetails as $v) {
-                    if ($v['released'] || ($isWs !== $scope->isWs($issue->projectKey))) {
-                        continue;
-                    }
-                    $key = $issue->projectKey.'|'.$v['name'];
-                    $releases[$key] ??= $this->createRelease($issue->projectKey, $v, $isWs, $calendar);
-                    $issuesByRelease[$key][$issue->key] = $issue;
+        foreach ($ws as $issue) {
+            if (!$scope->isWs($issue->projectKey)) {
+                continue;
+            }
+            foreach ($issue->versionDetails as $v) {
+                if ($v['released']) {
+                    continue;
+                }
+                $key = $issue->projectKey.'|'.$v['name'];
+                $releases[$key] ??= $this->createRelease($issue->projectKey, $v, true, $calendar);
+                $issuesByRelease[$key][$issue->key] = $issue;
+            }
+        }
+
+        // Pour chaque ticket WS : mes tickets qui en dépendent, avec la date de leur version
+        $requiredBy = [];
+        foreach ($mine as $issue) {
+            [$myVersion, $myDate] = $this->myDelivery($issue, $calendar);
+            foreach ($issue->links as $link) {
+                if (isset($ws[$link['key']])) {
+                    $requiredBy[$link['key']][$issue->key] = ['issue' => $issue, 'version' => $myVersion, 'date' => $myDate];
                 }
             }
         }
@@ -81,6 +96,7 @@ class ReleaseReadinessService
             }
             foreach ($issuesByRelease[$key] as $issueKey => $issue) {
                 $release->issues[$issueKey] = $this->views->create($issue);
+                $release->requiredBy[$issueKey] = array_values($requiredBy[$issueKey] ?? []);
             }
         }
 
@@ -103,7 +119,8 @@ class ReleaseReadinessService
         $id = (string) ($v['id'] ?? '');
         $source = $calendar->error ? null : $calendar->source($v['name'], $prefix, '' !== $id ? $id : null);
         $confluenceDate = $source['row']->date ?? null;
-        $date = $confluenceDate ?? $v['releaseDate'];
+        // Date de publication Jira prioritaire, calendrier Confluence à défaut
+        $date = $v['releaseDate'] ?? $confluenceDate;
 
         return new ReleaseReadiness(
             projectKey: $projectKey,
@@ -118,6 +135,27 @@ class ReleaseReadinessService
             otherComponents: $calendar->error || $source ? [] : $calendar->componentsForNumber($v['name'], $prefix),
             source: $source,
         );
+    }
+
+    /**
+     * Version de mon ticket livrée en premier et sa date (Jira prioritaire, sinon calendrier Confluence).
+     *
+     * @return array{0: ?string, 1: ?\DateTimeImmutable}
+     */
+    private function myDelivery(Issue $issue, DeliveryCalendar $calendar): array
+    {
+        $best = [null, null];
+        foreach ($issue->versionDetails as $v) {
+            if ($v['released']) {
+                continue;
+            }
+            $date = $v['releaseDate'] ?? ($calendar->error ? null : $calendar->dateOf($v['name'], $this->settings->getPrefix($issue->projectKey), ($v['id'] ?? '') ?: null));
+            if (null === $best[0] || ($date && (!$best[1] || $date < $best[1]))) {
+                $best = [$v['name'], $date];
+            }
+        }
+
+        return $best;
     }
 
     /**
@@ -155,16 +193,6 @@ class ReleaseReadinessService
     {
         $startDays = $this->settings->getStartDays();
 
-        // Date de livraison de chaque ticket WS connu (pour les dépendances de mes tickets)
-        $wsDelivery = [];
-        foreach ($releases as $release) {
-            if ($release->isWs) {
-                foreach ($release->issues as $view) {
-                    $wsDelivery[$view->issue->key][] = $release;
-                }
-            }
-        }
-
         foreach ($releases as $release) {
             $date = $release->getDate();
 
@@ -174,8 +202,11 @@ class ReleaseReadinessService
             } elseif ($release->isOverdue()) {
                 $release->addAlert(ReleaseReadiness::ERROR, sprintf('Date de livraison dépassée (%s) et version non livrée dans Jira.', $date->format('d/m/Y')));
             }
-            if ($release->jiraDate && $release->confluenceDate && $release->jiraDate != $release->confluenceDate) {
-                $release->addAlert(ReleaseReadiness::WARNING, sprintf('Date Jira %s ≠ date Confluence %s.', $release->jiraDate->format('d/m/Y'), $release->confluenceDate->format('d/m/Y')));
+            if ($release->hasDateGap()) {
+                $release->addAlert(ReleaseReadiness::ERROR, sprintf(
+                    'Écart de date : Jira %s ≠ Confluence %s (date Jira retenue).',
+                    $release->jiraDate->format('d/m/Y'), $release->confluenceDate->format('d/m/Y'),
+                ));
             }
             if ($release->source && $release->source['linkMismatch']) {
                 $release->addAlert(ReleaseReadiness::WARNING, sprintf(
@@ -188,17 +219,28 @@ class ReleaseReadinessService
             }
 
             foreach ($release->issues as $view) {
-                $this->evaluateIssue($release, $view, $startDays, $wsDelivery);
+                $this->evaluateIssue($release, $view, $startDays);
             }
         }
     }
 
-    /**
-     * @param array<string, ReleaseReadiness[]> $wsDelivery
-     */
-    private function evaluateIssue(ReleaseReadiness $release, IssueView $view, int $startDays, array $wsDelivery): void
+    private function evaluateIssue(ReleaseReadiness $release, IssueView $view, int $startDays): void
     {
         $issue = $view->issue;
+
+        // Livraison WS trop tardive pour la version d'un de mes tickets qui en dépend
+        $wsDate = $release->getDate();
+        $margin = $this->settings->getMarginDays();
+        foreach ($release->requiredBy[$issue->key] ?? [] as $dependent) {
+            if ($wsDate && $dependent['date'] && $wsDate > $dependent['date']->modify(sprintf('-%d days', $margin))) {
+                $release->addIssueAlert($issue, ReleaseReadiness::ERROR, sprintf(
+                    '%s (version %s du %s) en dépend : livraison WS le %s, %s.',
+                    $dependent['issue']->key, $dependent['version'], $dependent['date']->format('d/m/Y'), $wsDate->format('d/m/Y'),
+                    $wsDate > $dependent['date'] ? 'APRÈS cette version' : sprintf('moins de %d jour(s) avant', $margin),
+                ));
+            }
+        }
+
         if ($issue->isDone()) {
             return;
         }
@@ -226,21 +268,6 @@ class ReleaseReadinessService
                 StatusAge::CRITICAL === $view->age->level ? ReleaseReadiness::ERROR : ReleaseReadiness::WARNING,
                 sprintf('Dans « %s » depuis %s.', $issue->status, $view->age->getLabel()),
             );
-        }
-
-        // Mes tickets qui dépendent d'un ticket WS livré après ma version
-        if (!$release->isWs && $release->getDate()) {
-            foreach ($issue->links as $link) {
-                foreach ($wsDelivery[$link['key']] ?? [] as $wsRelease) {
-                    $wsDate = $wsRelease->getDate();
-                    if ($wsDate && $wsDate > $release->getDate()) {
-                        $release->addIssueAlert($issue, ReleaseReadiness::ERROR, sprintf(
-                            'Lié à %s, livré en %s le %s (après cette version).',
-                            $link['key'], $wsRelease->name, $wsDate->format('d/m/Y'),
-                        ));
-                    }
-                }
-            }
         }
     }
 }

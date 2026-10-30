@@ -26,3 +26,4 @@ pre.markdown { max-height: 400px; overflow: auto; background: #f8f9fa; padding: 
 .delivery-table tr.level-row-warning td:first-child { box-shadow: inset 4px 0 0 #ffc107; }
 .delivery-table tr.level-row-ok td:first-child { box-shadow: inset 4px 0 0 #198754; }
 details.card > summary { cursor: pointer; }
+.date-gap { color: #b02a37; font-weight: 600; background: #f8d7da; border-radius: .25rem; padding: .15rem .4rem; }

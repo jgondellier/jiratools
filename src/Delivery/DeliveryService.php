@@ -14,7 +14,7 @@ use App\Service\SprintService;
 /**
  * Corrélation entre les versions de mes projets et les livraisons des web services :
  * - tickets de mes projets liés à des tickets des projets WS ;
- * - dates de livraison WS lues dans le calendrier Confluence (référence) et comparées à Jira ;
+ * - date de livraison WS : date de publication Jira (prioritaire), à défaut calendrier Confluence ; écarts signalés ;
  * - tickets WS sans lien vers un ticket de mes projets.
  */
 class DeliveryService
@@ -160,7 +160,7 @@ class DeliveryService
             }
         }
 
-        // Versions WS : date Confluence (référence), sinon date Jira ; le ticket est livré avec sa dernière version
+        // Versions WS : date de publication Jira (prioritaire), sinon calendrier Confluence ; le ticket est livré avec sa dernière version
         $wsVersions = [];
         $wsDate = null;
         foreach ($ws->versionDetails as $v) {
@@ -173,7 +173,7 @@ class DeliveryService
                 'inConfluence' => [] !== $calendar->find($v['name'], $prefix, $v['id'] ?? null),
                 'otherComponents' => $calendar->componentsForNumber($v['name'], $prefix),
             ];
-            $date = $confluenceDate ?? $v['releaseDate'];
+            $date = $v['releaseDate'] ?? $confluenceDate;
             if ($date && (!$wsDate || $date > $wsDate)) {
                 $wsDate = $date;
             }
@@ -202,8 +202,8 @@ class DeliveryService
                 $check->add(DeliveryCheck::WARNING, sprintf('Version WS « %s » sans date lisible dans le calendrier Confluence.', $v['name']));
             }
             if ($v['jiraDate'] && $v['confluenceDate'] && $v['jiraDate'] != $v['confluenceDate']) {
-                $check->add(DeliveryCheck::WARNING, sprintf(
-                    'Version WS « %s » : date Jira %s ≠ date Confluence %s.',
+                $check->add(DeliveryCheck::ERROR, sprintf(
+                    'Écart de date pour la version WS « %s » : Jira %s ≠ Confluence %s (date Jira retenue).',
                     $v['name'], $v['jiraDate']->format('d/m/Y'), $v['confluenceDate']->format('d/m/Y'),
                 ));
             }
@@ -259,7 +259,7 @@ class DeliveryService
                 [] === $rows => ['warning', 'Absente du calendrier Confluence'.self::componentsHint($calendar->componentsForNumber($v['name'], $prefix), $v['projectKey'])],
                 null === $confluenceDate => ['warning', 'Date illisible dans Confluence'],
                 null === $v['releaseDate'] => ['warning', 'Pas de date dans Jira'],
-                $v['releaseDate'] != $confluenceDate => ['danger', 'Dates différentes'],
+                $v['releaseDate'] != $confluenceDate => ['danger', 'Écart de date (date Jira retenue)'],
                 default => ['success', null],
             };
             $result[] = [
