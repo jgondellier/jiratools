@@ -12,8 +12,9 @@ use App\Service\StatusAge;
 use App\Service\WorkingTime;
 
 /**
- * Prochaines livraisons : versions non livrées de mes projets et des projets WS, leurs tickets et
- * tout ce qui menace la date (tickets non commencés, bloqués, non assignés, qui traînent, dépendances WS).
+ * Dépendances livraison : versions non livrées impactées par les tickets de mes projets (projet + composants)
+ * et versions des tickets WS qui leur sont liés, avec tout ce qui menace la date (tickets non commencés,
+ * bloqués, non assignés, qui traînent, dépendances WS livrées trop tard).
  */
 class ReleaseReadinessService
 {
@@ -38,11 +39,51 @@ class ReleaseReadinessService
             return [];
         }
 
-        $releases = $this->selectVersions(array_merge($scope->myKeys, $scope->wsKeys), $scope->wsKeys, $calendar);
-        if ([] === $releases) {
-            return [];
+        // 1) Mes tickets (projet + composants) dans une version non livrée
+        $mine = $this->searchSplit(['mine' => "fixVersion in unreleasedVersions() AND $scope->myJql"]);
+
+        // 2) Tickets WS liés à ces tickets
+        $linked = [];
+        foreach ($mine as $issue) {
+            foreach ($issue->links as $link) {
+                if ($scope->isWs($link['projectKey'])) {
+                    $linked[$link['key']] = $link['key'];
+                }
+            }
         }
-        $this->loadIssues($releases, $scope);
+        $ws = [];
+        foreach (array_chunk(array_values($linked), 100) as $i => $chunk) {
+            $ws += $this->searchSplit(['ws'.$i => 'key in ('.implode(', ', $chunk).')']);
+        }
+
+        // 3) Versions impactées : versions non livrées de ces tickets (mes projets / projets WS)
+        $releases = [];
+        $issuesByRelease = [];
+        foreach ([[$mine, false], [$ws, true]] as [$issues, $isWs]) {
+            foreach ($issues as $issue) {
+                foreach ($issue->versionDetails as $v) {
+                    if ($v['released'] || ($isWs !== $scope->isWs($issue->projectKey))) {
+                        continue;
+                    }
+                    $key = $issue->projectKey.'|'.$v['name'];
+                    $releases[$key] ??= $this->createRelease($issue->projectKey, $v, $isWs, $calendar);
+                    $issuesByRelease[$key][$issue->key] = $issue;
+                }
+            }
+        }
+
+        // Horizon : versions à livrer dans les N jours, en retard ou sans date
+        $horizon = new \DateTimeImmutable(sprintf('today +%d days', $this->settings->getHorizonDays()));
+        foreach ($releases as $key => $release) {
+            if ($release->getDate() && $release->getDate() > $horizon) {
+                unset($releases[$key]);
+                continue;
+            }
+            foreach ($issuesByRelease[$key] as $issueKey => $issue) {
+                $release->issues[$issueKey] = $this->views->create($issue);
+            }
+        }
+
         $this->evaluate($releases);
 
         $list = array_values($releases);
@@ -52,75 +93,59 @@ class ReleaseReadinessService
     }
 
     /**
-     * Versions non livrées et non archivées, dont la date (Confluence, sinon Jira) tombe dans l'horizon,
-     * en retard, ou sans date.
+     * Version et sa date : Confluence (référence, avec sa provenance), sinon Jira.
      *
-     * @return array<string, ReleaseReadiness> clé "projet|version"
+     * @param array{id?: string, name: string, releaseDate: ?\DateTimeImmutable, released: bool} $v
      */
-    private function selectVersions(array $keys, array $wsKeys, DeliveryCalendar $calendar): array
+    private function createRelease(string $projectKey, array $v, bool $isWs, DeliveryCalendar $calendar): ReleaseReadiness
     {
-        $horizon = new \DateTimeImmutable(sprintf('today +%d days', $this->settings->getHorizonDays()));
-        $releases = [];
-        foreach ($this->jira->getVersionsMany($keys) as $projectKey => $versions) {
-            $prefix = $this->settings->getPrefix($projectKey);
-            foreach ($versions as $v) {
-                if ($v['released'] || $v['archived']) {
-                    continue;
-                }
-                $confluenceDate = $calendar->error ? null : $calendar->dateOf($v['name'], $prefix, $v['id']);
-                $date = $confluenceDate ?? $v['releaseDate'];
-                if ($date && $date > $horizon) {
-                    continue;
-                }
-                $releases[$projectKey.'|'.$v['name']] = new ReleaseReadiness(
-                    projectKey: $projectKey,
-                    versionId: $v['id'],
-                    name: $v['name'],
-                    isWs: \in_array($projectKey, $wsKeys, true),
-                    jiraDate: $v['releaseDate'],
-                    confluenceDate: $confluenceDate,
-                    inConfluence: !$calendar->error && [] !== $calendar->find($v['name'], $prefix, $v['id']),
-                    otherComponents: $calendar->error ? [] : $calendar->componentsForNumber($v['name'], $prefix),
-                    daysLeft: $date ? $this->workingTime->remainingDays($date) : null,
-                    url: $this->jira->versionUrl($projectKey, $v['id']),
-                );
-            }
-        }
+        $prefix = $this->settings->getPrefix($projectKey);
+        $id = (string) ($v['id'] ?? '');
+        $source = $calendar->error ? null : $calendar->source($v['name'], $prefix, '' !== $id ? $id : null);
+        $confluenceDate = $source['row']->date ?? null;
+        $date = $confluenceDate ?? $v['releaseDate'];
 
-        return $releases;
+        return new ReleaseReadiness(
+            projectKey: $projectKey,
+            versionId: $id,
+            name: $v['name'],
+            isWs: $isWs,
+            jiraDate: $v['releaseDate'],
+            confluenceDate: $confluenceDate,
+            inConfluence: null !== $source,
+            daysLeft: $date ? $this->workingTime->remainingDays($date) : null,
+            url: '' !== $id ? $this->jira->versionUrl($projectKey, $id) : null,
+            otherComponents: $calendar->error || $source ? [] : $calendar->componentsForNumber($v['name'], $prefix),
+            source: $source,
+        );
     }
 
     /**
-     * Tickets des versions retenues, dans le périmètre du board (mon projet + tickets WS du board),
-     * en un seul lot de recherches. L'historique (pour la durée dans le statut) n'est demandé que pour
-     * les tickets non terminés.
+     * Recherches séparées terminés / non terminés (l'historique, pour la durée dans le statut, n'est
+     * demandé que pour les tickets non terminés), envoyées en parallèle.
      *
-     * @param array<string, ReleaseReadiness> $releases
+     * @param array<string, string> $jqls
+     *
+     * @return array<string, Issue> clé du ticket => ticket
      */
-    private function loadIssues(array $releases, DeliveryScope $scope): void
+    private function searchSplit(array $jqls): array
     {
-        $ids = array_map(fn (ReleaseReadiness $r) => $r->versionId, array_values($releases));
-        $jql = sprintf('fixVersion in (%s) AND %s', implode(', ', $ids), $scope->issuesJql());
-
-        $results = $this->jira->searchMany([
-            'open' => ["$jql AND statusCategory != Done ORDER BY key ASC", 2000, true, ['issuelinks']],
-            'done' => ["$jql AND statusCategory = Done ORDER BY key ASC", 2000, false],
-        ]);
-
-        foreach ($results as $result) {
+        $searches = [];
+        foreach ($jqls as $key => $jql) {
+            $searches[$key.'_open'] = ["$jql AND statusCategory != Done ORDER BY key ASC", 2000, true, ['issuelinks']];
+            $searches[$key.'_done'] = ["$jql AND statusCategory = Done ORDER BY key ASC", 2000, false, ['issuelinks']];
+        }
+        $issues = [];
+        foreach ($this->jira->searchMany($searches) as $result) {
             if ($result instanceof AtlassianException) {
                 throw $result;
             }
             foreach ($result as $issue) {
-                $view = $this->views->create($issue);
-                foreach ($issue->versionDetails as $v) {
-                    // Indexé par clé : un ticket n'apparaît qu'une fois par version
-                    if (isset($releases[$issue->projectKey.'|'.$v['name']])) {
-                        $releases[$issue->projectKey.'|'.$v['name']]->issues[$issue->key] = $view;
-                    }
-                }
+                $issues[$issue->key] = $issue;
             }
         }
+
+        return $issues;
     }
 
     /**
@@ -144,12 +169,19 @@ class ReleaseReadinessService
             $date = $release->getDate();
 
             if (null === $date) {
-                $release->addAlert(ReleaseReadiness::WARNING, 'Pas de date de livraison (ni dans Confluence, ni dans Jira).');
+                $release->addAlert(ReleaseReadiness::WARNING, 'Pas de date de livraison (ni dans Confluence, ni dans Jira).'
+                    .DeliveryService::componentsHint($release->otherComponents, $release->projectKey));
             } elseif ($release->isOverdue()) {
                 $release->addAlert(ReleaseReadiness::ERROR, sprintf('Date de livraison dépassée (%s) et version non livrée dans Jira.', $date->format('d/m/Y')));
             }
             if ($release->jiraDate && $release->confluenceDate && $release->jiraDate != $release->confluenceDate) {
                 $release->addAlert(ReleaseReadiness::WARNING, sprintf('Date Jira %s ≠ date Confluence %s.', $release->jiraDate->format('d/m/Y'), $release->confluenceDate->format('d/m/Y')));
+            }
+            if ($release->source && $release->source['linkMismatch']) {
+                $release->addAlert(ReleaseReadiness::WARNING, sprintf(
+                    'Calendrier Confluence, ligne %d : le lien « %s » pointe vers cette version Jira « %s ». Date reprise de cette ligne : vérifiez la page.',
+                    $release->source['row']->number, $release->source['linkText'], $release->name,
+                ));
             }
             if (!$release->inConfluence && $release->jiraDate) {
                 $release->addAlert(ReleaseReadiness::WARNING, 'Absente du calendrier Confluence.'.DeliveryService::componentsHint($release->otherComponents, $release->projectKey));

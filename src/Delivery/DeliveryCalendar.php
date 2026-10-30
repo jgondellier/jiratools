@@ -32,28 +32,57 @@ final class DeliveryCalendar
      */
     public function find(string $versionName, ?string $component = null, ?string $versionId = null): array
     {
+        return $this->search($versionName, $component, $versionId)['rows'];
+    }
+
+    /**
+     * Provenance de la date retenue : ligne du calendrier, méthode de rapprochement et, pour un lien,
+     * texte du lien et cohérence de ce texte avec le nom de la version Jira.
+     *
+     * @return array{row: DeliveryRow, method: string, linkText: ?string, linkMismatch: bool}|null
+     */
+    public function source(string $versionName, ?string $component = null, ?string $versionId = null): ?array
+    {
+        $result = $this->search($versionName, $component, $versionId);
+        $rows = array_values(array_filter($result['rows'], fn (DeliveryRow $r) => null !== $r->date)) ?: $result['rows'];
+        if ([] === $rows) {
+            return null;
+        }
+        $row = $rows[0];
+        $linkText = 'link' === $result['method'] ? ($row->versionIds[$versionId] ?? null) : null;
+
+        return [
+            'row' => $row,
+            'method' => $result['method'],
+            'linkText' => $linkText,
+            // Lien vers cette version mais dont le texte désigne une autre version (erreur de lien dans la page)
+            'linkMismatch' => null !== $linkText && !self::sameVersion($linkText, $versionName, $component),
+        ];
+    }
+
+    /**
+     * @return array{rows: DeliveryRow[], method: ?string} method : link (lien vers la version Jira), name (numéro + composant), text
+     */
+    private function search(string $versionName, ?string $component, ?string $versionId): array
+    {
         // Lien vers la version Jira dans la cellule : rapprochement exact par identifiant
         if (null !== $versionId && '' !== $versionId) {
             $byId = array_values(array_filter($this->rows, fn (DeliveryRow $row) => isset($row->versionIds[$versionId])));
             if ([] !== $byId) {
-                return self::sortByDate($byId);
+                return ['rows' => self::sortByDate($byId), 'method' => 'link'];
             }
         }
 
         $wanted = self::wanted($versionName, $component);
         if (null === $wanted) {
-            return $this->findText($versionName, $component);
+            // Version sans numéro (ex. « Release Printemps ») : comparaison sur le texte
+            $rows = $this->findText($versionName, $component);
+
+            return ['rows' => $rows, 'method' => [] !== $rows ? 'text' : null];
         }
 
         $found = [];
         foreach ($this->rows as $row) {
-            if ([] === $row->entries) {
-                // Cellule sans numéro de version reconnaissable : comparaison sur le texte
-                if ([] !== $this->filterText([$row], $versionName, $component)) {
-                    $found[] = $row;
-                }
-                continue;
-            }
             foreach ($row->entries as $entry) {
                 if (self::matches($entry, $wanted)) {
                     $found[] = $row;
@@ -62,7 +91,23 @@ final class DeliveryCalendar
             }
         }
 
-        return self::sortByDate($found);
+        return ['rows' => self::sortByDate($found), 'method' => [] !== $found ? 'name' : null];
+    }
+
+    /** Le texte d'un lien désigne-t-il bien la version Jira (même numéro et même composant) ? */
+    private static function sameVersion(string $linkText, string $versionName, ?string $component): bool
+    {
+        $wanted = self::wanted($versionName, $component);
+        if (null === $wanted) {
+            return true; // nom non comparable : pas d'alerte
+        }
+        foreach (VersionExtractor::extract($linkText, false) as $entry) {
+            if (self::matches($entry, $wanted)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -92,7 +137,7 @@ final class DeliveryCalendar
     /** @return array{version: string, component: ?string}|null */
     private static function wanted(string $versionName, ?string $component): ?array
     {
-        $entries = VersionExtractor::extract($versionName);
+        $entries = VersionExtractor::extract($versionName, false);
         if (1 !== \count($entries)) {
             return null;
         }
@@ -103,19 +148,12 @@ final class DeliveryCalendar
     }
 
     /**
-     * Même numéro et même composant. Un numéro seul ne correspond qu'à une ligne sans composant
-     * (« 1.5.0 » de mon projet ≠ « 1.5.0 WS ») ; une ligne sans composant correspond à tout composant.
+     * Même numéro et même composant, dans les deux sens : un numéro seul ne correspond qu'à un numéro seul
+     * (« 1.5.0 » ≠ « 1.5.0 WS ») ; un numéro isolé dans un commentaire ne vaut donc pas pour une autre version.
      */
     private static function matches(array $entry, array $wanted): bool
     {
-        if ($entry['version'] !== $wanted['version']) {
-            return false;
-        }
-        if (null === $entry['component']) {
-            return true;
-        }
-
-        return null !== $wanted['component']
+        return $entry['version'] === $wanted['version']
             && VersionExtractor::foldComponent($entry['component']) === VersionExtractor::foldComponent($wanted['component']);
     }
 

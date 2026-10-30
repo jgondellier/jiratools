@@ -125,7 +125,7 @@ class AppTest extends WebTestCase
 
         $this->client->request('GET', '/livraisons');
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h1', 'Livraisons');
+        self::assertSelectorTextContains('h1', 'Dépendances livraison');
         self::assertSelectorTextContains('body', 'Calendrier des livraisons');
     }
 

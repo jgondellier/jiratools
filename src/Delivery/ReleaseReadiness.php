@@ -34,6 +34,8 @@ final class ReleaseReadiness
         public readonly ?int $daysLeft,
         public readonly ?string $url = null,
         public readonly array $otherComponents = [],
+        /** Provenance de la date Confluence : ligne, méthode (link / name / text), texte du lien */
+        public readonly ?array $source = null,
     ) {
     }
 
@@ -41,6 +43,27 @@ final class ReleaseReadiness
     public function getDate(): ?\DateTimeImmutable
     {
         return $this->confluenceDate ?? $this->jiraDate;
+    }
+
+    /** Explication de la date affichée */
+    public function getDateSourceLabel(): string
+    {
+        if ($this->confluenceDate && $this->source) {
+            $row = $this->source['row'];
+            $how = match ($this->source['method']) {
+                'link' => sprintf('lien vers la version Jira « %s »', $this->source['linkText']),
+                'name' => 'nom de la version',
+                default => 'texte de la cellule',
+            };
+
+            return sprintf('Calendrier Confluence, ligne %d (« %s » ; %s)%s', $row->number, $row->rawDate, $how,
+                $this->jiraDate ? ' — date Jira : '.$this->jiraDate->format('d/m/Y') : ' — pas de date dans Jira');
+        }
+        if ($this->source) {
+            return sprintf('Trouvée dans le calendrier Confluence (ligne %d) mais date illisible (« %s ») : date Jira utilisée.', $this->source['row']->number, $this->source['rawDate'] ?? $this->source['row']->rawDate);
+        }
+
+        return $this->jiraDate ? 'Date de la version dans Jira (absente du calendrier Confluence)' : 'Aucune date';
     }
 
     public function isOverdue(): bool

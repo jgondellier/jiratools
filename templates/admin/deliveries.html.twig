@@ -1,9 +1,9 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Paramétrage des livraisons{% endblock %}
+{% block title %}Paramétrage des dépendances livraison{% endblock %}
 
 {% block body %}
-    <h1 class="h3 mb-3"><i class="bi bi-truck"></i> Paramétrage des livraisons</h1>
+    <h1 class="h3 mb-3"><i class="bi bi-truck"></i> Paramétrage des dépendances livraison</h1>
 
     <div class="row g-3">
         <div class="col-lg-5">
@@ -68,7 +68,7 @@
                         </div>
                     </div>
                     <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
-                    {% if settings.configured %}<a href="{{ path('delivery') }}" class="btn btn-outline-secondary">Voir les livraisons</a>{% endif %}
+                    {% if settings.configured %}<a href="{{ path('delivery') }}" class="btn btn-outline-secondary">Voir les dépendances livraison</a>{% endif %}
                 </div>
             </form>
         </div>

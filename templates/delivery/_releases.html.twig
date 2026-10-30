@@ -20,13 +20,14 @@
                             {% else %}
                                 <span class="badge {{ release.daysLeft <= settings.startDays ? 'text-bg-danger' : (release.daysLeft <= 2 * settings.startDays ? 'text-bg-warning' : 'text-bg-secondary') }}" title="Jours ouvrés restants, aujourd'hui inclus">J-{{ release.daysLeft }}</span>
                             {% endif %}
-                            <span class="small text-muted" title="Source de la date">{{ release.confluenceDate ? 'Confluence' : 'Jira' }}</span>
+                            <span class="small text-muted" title="{{ release.dateSourceLabel }}">{{ release.confluenceDate ? 'Confluence' : 'Jira' }} <i class="bi bi-info-circle"></i></span>
                         {% else %}
                             <span class="badge text-bg-warning">sans date</span>
                         {% endif %}
                     </div>
                 </div>
                 <div class="card-body">
+                    <div class="small text-muted mb-2"><i class="bi bi-signpost"></i> {{ release.dateSourceLabel }}</div>
                     {% if release.total == 0 %}
                         <p class="text-muted small mb-2">Aucun ticket dans cette version{{ release.isWs and settings.wsLabels ? ' (avec l\'étiquette ' ~ settings.wsLabels|join(', ') ~ ')' }}.</p>
                     {% else %}
@@ -85,7 +86,7 @@
         </div>
     {% else %}
         <div class="col"><div class="alert alert-light border mb-0">
-            {{ only_problems ? 'Aucune version à risque 👍' : 'Aucune version non livrée dans les ' ~ settings.horizonDays ~ ' prochains jours.' }}
+            {{ only_problems ? 'Aucune version à risque 👍' : 'Aucune version non livrée impactée par vos tickets dans les ' ~ settings.horizonDays ~ ' prochains jours.' }}
         </div></div>
     {% endfor %}
 </div>

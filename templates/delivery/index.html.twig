@@ -1,6 +1,6 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Livraisons{% endblock %}
+{% block title %}Dépendances livraison{% endblock %}
 
 {% macro issue_link(issue) %}
     <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
@@ -11,7 +11,7 @@
 {% block body %}
     {% set calendar = report.calendar %}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Livraisons</h1>
+        <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Dépendances livraison</h1>
         <form class="d-flex flex-wrap gap-2 align-items-center" method="get">
             <select name="project" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Tous mes projets</option>
@@ -28,7 +28,7 @@
     <div class="row g-3 mb-3">
         <div class="col-6 col-md">
             <div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-box-seam"></i> Versions à livrer ({{ settings.horizonDays }} j)</div><div class="display-6">{{ release_stats.count }}</div>
+                <div class="small"><i class="bi bi-box-seam"></i> Versions impactées ({{ settings.horizonDays }} j)</div><div class="display-6">{{ release_stats.count }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
@@ -58,8 +58,8 @@
             Les dates Jira des versions WS sont utilisées à la place. <a href="{{ path('admin_deliveries') }}">Paramétrage</a></div>
     {% endif %}
 
-    <h2 class="h5 mb-3"><i class="bi bi-box-seam"></i> Prochaines livraisons
-        <small class="text-muted fw-normal">— mon projet et projets web services, date Confluence (sinon Jira)</small></h2>
+    <h2 class="h5 mb-3"><i class="bi bi-box-seam"></i> Versions impactées par mes tickets
+        <small class="text-muted fw-normal">— versions de mes tickets ({{ scope.myKeys|join(', ') }}, avec leurs composants) et des tickets WS qui leur sont liés ; date Confluence, sinon Jira</small></h2>
     {{ include('delivery/_releases.html.twig') }}
 
     <h2 class="h5 mb-3"><i class="bi bi-diagram-3"></i> Dépendances et cohérence</h2>

@@ -11,17 +11,21 @@ namespace App\Delivery;
 final class VersionExtractor
 {
     private const NUMBER = 'v?(\d+(?:\.\d+){1,3})';
-    private const COMPONENT = '([A-Za-z][A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*)';
+    private const COMPONENT = '(%s[A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*)';
     /** Après un numéro, le composant peut faire plusieurs mots si les suivants commencent par une majuscule (« Batch AB ») */
-    private const COMPONENT_WORDS = '([A-Za-z][A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*(?:[ \t\x{a0}]+[A-Z][A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*)*)';
+    private const COMPONENT_WORDS = '(%s[A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*(?:[ \t\x{a0}]+[A-Z][A-Za-z0-9_]*(?:[-\/][A-Za-z0-9_]+)*)*)';
 
     /**
+     * @param bool $uppercaseComponents un composant doit commencer par une majuscule (texte libre d'une page,
+     *                                  où « correctif 4.68.0 » n'est pas un composant) ; false pour un nom de version Jira
+     *
      * @return array<int, array{version: string, component: ?string}>
      */
-    public static function extract(string $text): array
+    public static function extract(string $text, bool $uppercaseComponents = true): array
     {
-        $numberFirst = '/(?<![\w.])'.self::NUMBER.'(?:[ \t\x{a0}_-]*'.self::COMPONENT_WORDS.')?/u';
-        $componentFirst = '/(?<![\w-])'.self::COMPONENT.'[ \t\x{a0}]*[:\-]?[ \t\x{a0}]*'.self::NUMBER.'(?![\w.])/u';
+        $first = $uppercaseComponents ? '[A-Z]' : '[A-Za-z]';
+        $numberFirst = '/(?<![\w.])'.self::NUMBER.'(?:[ \t\x{a0}_-]*'.sprintf(self::COMPONENT_WORDS, $first).')?/u';
+        $componentFirst = '/(?<![\w-])'.sprintf(self::COMPONENT, $first).'[ \t\x{a0}]*[:\-]?[ \t\x{a0}]*'.self::NUMBER.'(?![\w.])/u';
 
         preg_match_all($numberFirst, $text, $nf, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
         preg_match_all($componentFirst, $text, $cf, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);

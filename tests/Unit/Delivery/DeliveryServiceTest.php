@@ -182,8 +182,9 @@ class DeliveryServiceTest extends TestCase
 
         self::assertSame(['WSC-8'], array_map(fn (Issue $i) => $i->key, $report['unlinked']));
 
-        // Versions : uniquement celles des tickets WS suivis ou liés
-        self::assertSame(['1.4.2', '1.5.0'], array_column($report['versions'], 'name'), '0.9 livrée il y a plus de 90 jours exclue');
-        self::assertSame(['WSC-8'], $report['versions'][1]['issues']);
+        // Versions : uniquement celles des tickets WS liés à mes tickets (WSC-8, non lié, exclu ;
+        // 0.9 livrée il y a plus de 90 jours exclue)
+        self::assertSame(['1.4.2'], array_column($report['versions'], 'name'));
+        self::assertSame(['WSC-1'], $report['versions'][0]['issues']);
     }
 }

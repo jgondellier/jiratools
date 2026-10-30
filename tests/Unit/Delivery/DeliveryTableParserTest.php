@@ -92,13 +92,39 @@ class DeliveryTableParserTest extends TestCase
         self::assertSame([], $calendar->componentsForNumber('1.4.2', 'WS'), 'composant connu : pas de suggestion');
     }
 
-    public function testCellWithoutComponentMatchesAnyComponent(): void
+    public function testBareNumberOnlyMatchesBareNumber(): void
     {
-        $page = '<table><tr><th>Date</th><th>Version</th></tr><tr><td>05/11/2026</td><td>1.6.0</td></tr></table>';
+        $page = '<table><tr><th>Date</th><th>Version</th></tr>'
+            .'<tr><td>05/11/2026</td><td>1.6.0 (cf. correctif 4.68.0 de la semaine dernière)</td></tr></table>';
         $calendar = new DeliveryCalendar((new DeliveryTableParser())->parse($page)['rows']);
 
         self::assertSame('2026-11-05', $calendar->dateOf('1.6.0')?->format('Y-m-d'));
-        self::assertSame('2026-11-05', $calendar->dateOf('1.6.0', 'WS')?->format('Y-m-d'));
+        self::assertNull($calendar->dateOf('1.6.0', 'WS'), 'numéro seul dans la page : pas pour « 1.6.0 WS »');
+        self::assertNull($calendar->dateOf('4.68.0 WS'), 'numéro cité dans un commentaire : pas pour « 4.68.0 WS »');
+    }
+
+    public function testDateSourceAndLinkMismatch(): void
+    {
+        $page = '<table><tr><th>Date</th><th>Version</th></tr>'
+            .'<tr><td>05/11/2026</td><td><a href="https://jira.test/projects/WS/versions/500">4.68.0 WS</a></td></tr>'
+            .'<tr><td>12/11/2026</td><td><a href="https://jira.test/projects/WS/versions/777">4.69.0 WS</a></td></tr>'
+            .'<tr><td>19/11/2026</td><td>2.0.0 WS-REF <a href="https://wiki.test/pages/viewpage.action?pageId=1&amp;version=500">historique</a></td></tr></table>';
+        $calendar = new DeliveryCalendar((new DeliveryTableParser())->parse($page)['rows']);
+
+        $byLink = $calendar->source('4.68.0 WS', null, '500');
+        self::assertSame('link', $byLink['method']);
+        self::assertSame(1, $byLink['row']->number);
+        self::assertFalse($byLink['linkMismatch']);
+
+        // La version Jira 777 s'appelle « 4.70.0 WS » mais le lien de la page dit « 4.69.0 WS »
+        $mismatch = $calendar->source('4.70.0 WS', null, '777');
+        self::assertTrue($mismatch['linkMismatch']);
+        self::assertSame('4.69.0 WS', $mismatch['linkText']);
+
+        $byName = $calendar->source('2.0.0 WS-REF', null, '999');
+        self::assertSame('name', $byName['method']);
+        self::assertSame([], $calendar->rows[2]->versionIds, 'lien d\'historique Confluence ignoré');
+        self::assertNull($calendar->source('9.9.9 WS', null, '999'));
     }
 
     /**

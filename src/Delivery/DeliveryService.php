@@ -104,6 +104,13 @@ class DeliveryService
         }
         $wsIssues += $this->fetchByKeys(array_keys($missing));
 
+        $linkedToMine = [];
+        foreach ($mine as $issue) {
+            foreach ($issue->links as $link) {
+                $linkedToMine[$link['key']] = true;
+            }
+        }
+
         // 3) Contrôles
         $checks = [];
         $myVersionsWithoutDate = [];
@@ -131,8 +138,8 @@ class DeliveryService
         return [
             'calendar' => $calendar,
             'checks' => $checks,
-            // Versions WS à contrôler : celles des tickets WS suivis ou liés (le projet WS peut en contenir d'autres)
-            'versions' => $this->compareVersions(array_values($wsIssues), $calendar),
+            // Versions WS à contrôler : celles des tickets WS liés à mes tickets (projet + composants)
+            'versions' => $this->compareVersions(array_values(array_intersect_key($wsIssues, $linkedToMine)), $calendar),
             'unlinked' => $unlinked,
             'myVersionsWithoutDate' => array_keys($myVersionsWithoutDate),
         ];

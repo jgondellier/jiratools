@@ -182,7 +182,8 @@ final class DeliveryTableParser
         $ids = [];
         foreach ($cell->getElementsByTagName('a') as $link) {
             $href = $link->getAttribute('href');
-            if (preg_match('#(?:/versions/|fixforversion/|[?&]version=|[?&]versionId=)(\d+)#i', $href, $m)) {
+            // /projects/KEY/versions/123, /browse/KEY/fixforversion/123 ; pas « ?version=3 » (historique d'une page Confluence)
+            if (preg_match('#(?:/projects/[^/]+/versions/|/fixforversion/|[?&]versionId=)(\d+)#i', $href, $m)) {
                 $ids[$m[1]] = trim(preg_replace('/\s+/u', ' ', $link->textContent) ?? '');
             }
         }
