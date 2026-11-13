@@ -10,7 +10,6 @@ Application Symfony 7.4 (LTS) / PHP 8.2+ pour suivre vos équipes et vos projets
 | **Dépendances livraison** | Versions non livrées du **projet web services** dont dépendent les tickets de mes projets (projet + composants) : pour chaque version, ses tickets WS liés, les tickets de mon projet qui en dépendent (« requis par ») et ce qui menace la date : livraison WS après la version de mes tickets (ou sans la marge), tickets WS pas commencés à l'approche de la date, bloqués, non assignés, qui traînent, non terminés après la date. **Date de la version : date de publication Jira, à défaut calendrier Confluence**, avec sa provenance ; tout **écart Jira ≠ Confluence est mis en évidence** (badge rouge, alerte, compteur). En dessous, les dépendances ticket par ticket et les tickets WS du board liés à aucun ticket de mes projets. |
 | **Suivi & alertes** | Tickets qui traînent au-delà du seuil de leur statut, tickets bloqués (drapeau), sprint : non estimés / non assignés, tickets sans composant, vieux bugs, tickets réouverts, pages Confluence obsolètes. |
 | **Projets** | Fiche projet : équipes, composants, board, pages Confluence rattachées (avec date de dernière modification), sprint en cours, tickets qui traînent. |
-| **Mises à jour locales** | Met à jour les applications installées sur le poste : téléchargement du code depuis Git (**archive zip** GitHub, GitLab, Bitbucket ou URL), décompression dans le répertoire du projet en conservant `.env.local`, `var/`, `vendor/`…, puis lancement des commandes (`composer install`, **migrations**, **cache:clear**, **import catalogue**…). Journal de chaque exécution, simulation, sauvegarde des fichiers remplacés. Aussi en ligne de commande. |
 | **Paramétrage** | Équipes, membres (import depuis Jira), projets (projet Jira + composants + board), pages Confluence, statuts de travail par rôle, seuils d'alerte par statut, test de connexion. |
 
 ## Installation sous EasyPHP (Windows)
@@ -101,69 +100,6 @@ Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectiv
 
 **Erreur « SSL certificate problem: unable to get local issuer certificate » sous Windows** : PHP ne connaît pas l'autorité qui a signé le certificat (souvent un proxy d'entreprise qui inspecte le SSL). Exportez le certificat racine de l'entreprise (depuis le navigateur, au format *Base64 / PEM*) et indiquez son chemin dans `APP_HTTP_CAFILE`, plutôt que de mettre `APP_HTTP_VERIFY_PEER=0`.
 
-## Mises à jour locales
-
-Écran *Mises à jour locales* (accessible **uniquement depuis le poste**, `127.0.0.1`) ou commande `app:local-update`.
-
-### Paramétrer une application
-
-*Nouvelle application* :
-
-| Champ | Exemple |
-|---|---|
-| Hébergement | GitHub, GitLab, Bitbucket ou « URL du zip » |
-| Dépôt | `mon-entreprise/catalogue` (GitLab : `groupe/sous-groupe/projet`) ; l'URL complète du dépôt est acceptée. « URL du zip » : `https://git.intranet/catalogue/archive/{ref}.zip` |
-| Serveur | GitLab auto-hébergé `https://gitlab.mon-entreprise.fr`, GitHub Enterprise `https://github.mon-entreprise.fr/api/v3` |
-| Branche / tag | `main`, `develop`, `v2.3.0`… (modifiable à chaque lancement) |
-| Jeton | Dépôt privé : `env:GITHUB_TOKEN` et, dans `.env.local`, `GITHUB_TOKEN=ghp_xxx` (le jeton n'est alors pas stocké en base). GitHub : droit *Contents: read* ; GitLab : *read_repository* ; Bitbucket : `utilisateur:mot-de-passe-d'application` |
-| Répertoire du projet | `C:/EasyPHP/eds-www/catalogue` (créé au premier déploiement) |
-| Fichiers protégés | jamais écrasés ni supprimés : `.env.local`, `.env.*.local`, `var/`, `vendor/`, `node_modules/`, `public/uploads/`… |
-| Commandes | une par ligne, dans l'ordre (voir ci-dessous) |
-
-Commandes par défaut (à adapter ; une ligne commençant par `#` est ignorée) :
-
-```
-{composer} install --no-interaction --optimize-autoloader
-php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
-php bin/console cache:clear
-php bin/console app:import-catalogue
-```
-
-- `php` en début de ligne est remplacé par `LOCAL_UPDATE_PHP_BINARY`, `{composer}` par `LOCAL_UPDATE_COMPOSER`, `{dir}` par le répertoire du projet.
-- Chaque commande s'exécute dans le répertoire du projet avec **son propre** `.env` / `.env.local` : les variables de Jira Tools (`APP_ENV`, `DATABASE_URL`…) ne sont pas transmises. Pour en imposer, utilisez le champ *Variables d'environnement* (`APP_ENV=dev`).
-- Par défaut, la mise à jour s'arrête à la première commande en erreur.
-
-### Lancer une mise à jour
-
-Sur la fiche de l'application : choisissez la branche / le tag, cochez ou non le téléchargement du code et chaque commande, puis *Lancer*. Le journal complet (sortie des commandes comprise) est conservé et consultable dans l'historique. *Simulation* liste les fichiers qui seraient ajoutés / modifiés / supprimés sans rien écrire ni lancer.
-
-Ce que fait la copie :
-- seuls les fichiers dont le contenu change sont réécrits ;
-- un fichier retiré du dépôt est supprimé du projet **uniquement s'il avait été déployé par la mise à jour précédente** (un fichier créé à la main n'est jamais supprimé ; au premier déploiement, rien n'est supprimé) ;
-- les fichiers remplacés ou supprimés sont sauvegardés dans `var/local-updates/backups/app-<id>/<date>/` de Jira Tools (5 dernières mises à jour).
-
-En ligne de commande (conseillé pour les traitements longs, sortie en direct) :
-
-```bat
-php bin/console app:local-update                      &rem liste des applications
-php bin/console app:local-update catalogue            &rem mise à jour complète
-php bin/console app:local-update catalogue --ref=develop --dry-run
-php bin/console app:local-update catalogue --no-deploy   &rem commandes seules
-php bin/console app:local-update --all
-```
-
-### Réglages (`.env.local`)
-
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `LOCAL_UPDATE_PHP_BINARY` | *(vide)* | Exécutable PHP des commandes. **Sous EasyPHP / Apache, renseignez-le**, ex. `C:/EasyPHP/eds-binaries/php/php829vs16x64/php.exe` (la fiche de l'application affiche celui qui sera utilisé) |
-| `LOCAL_UPDATE_COMPOSER` | `composer` | Commande Composer, ex. `"{php} C:/composer/composer.phar"` |
-| `LOCAL_UPDATE_COMMAND_TIMEOUT` | `1800` | Durée maximale d'une commande (s, 0 = illimitée) |
-| `LOCAL_UPDATE_BACKUPS_KEPT` | `5` | Sauvegardes conservées par application |
-| `LOCAL_UPDATE_ALLOW_REMOTE` | `0` | `1` rend l'écran accessible depuis un autre poste (déconseillé : il lance des commandes sur ce poste) |
-
-Le téléchargement utilise les options de connexion `APP_HTTP_*` (proxy, certificat de l'entreprise). Si Composer échoue depuis Apache faute de dossier utilisateur, ajoutez `COMPOSER_HOME=C:/Users/<vous>/AppData/Roaming/Composer` dans les variables d'environnement de l'application.
-
 ## Fonctionnement
 
 - « Ticket de travail » d'un membre = ticket dans un statut coché pour son rôle dans *Paramétrage → Statuts de travail par rôle* (à défaut, colonne *Par défaut*, puis tous les statuts de la **catégorie** Jira *In Progress*). La limite WIP porte sur ces tickets.
@@ -185,4 +121,4 @@ php vendor/bin/phpunit          # tests unitaires et fonctionnels (Jira simulé,
 php bin/console lint:twig templates
 ```
 
-Structure : `src/Jira` et `src/Confluence` (clients REST), `src/Service` (règles de suivi : activité, sprints, backlog, alertes), `src/LocalUpdate` (mises à jour locales), `src/Controller` (écrans), `src/Controller/Admin` (paramétrage), `templates/`.
+Structure : `src/Jira` et `src/Confluence` (clients REST), `src/Service` (règles de suivi : activité, sprints, backlog, alertes), `src/Controller` (écrans), `src/Controller/Admin` (paramétrage), `templates/`.
