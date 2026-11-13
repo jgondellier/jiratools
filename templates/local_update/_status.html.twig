@@ -1,0 +1,6 @@
+{% set s = status ?? null %}
+{% if s == 'success' %}<span class="badge text-bg-success"><i class="bi bi-check-circle"></i> Réussie</span>
+{% elseif s == 'failed' %}<span class="badge text-bg-danger"><i class="bi bi-x-circle"></i> En échec</span>
+{% elseif s == 'running' %}<span class="badge text-bg-warning"><i class="bi bi-hourglass-split"></i> En cours</span>
+{% elseif s == 'simulated' %}<span class="badge text-bg-info"><i class="bi bi-eye"></i> Simulation</span>
+{% else %}<span class="badge text-bg-light text-muted">Jamais lancée</span>{% endif %}

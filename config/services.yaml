@@ -23,6 +23,7 @@ services:
             - '../src/Confluence/ConfluencePageInfo.php'
             - '../src/Service/{IssueView,StatusAge,SprintReport,DeveloperActivity}.php'
             - '../src/Delivery/{DeliveryRow,DeliveryCalendar,DeliveryCheck,DateParser,ReleaseReadiness,DeliveryScope}.php'
+            - '../src/LocalUpdate/{ArchiveRequest,PathMatcher,SyncResult,UpdateOptions,LocalUpdateException}.php'
 
     # --- Connexions Atlassian -------------------------------------------------
     app.jira_http:
@@ -71,6 +72,19 @@ services:
     App\Service\HealthService:
         arguments:
             $doneStatuses: '%env(JIRA_DONE_STATUSES)%'
+
+    # --- Mises à jour locales ----------------------------------------------------
+    App\LocalUpdate\CommandRunner:
+        arguments:
+            $phpBinary: '%env(LOCAL_UPDATE_PHP_BINARY)%'
+            $composer: '%env(LOCAL_UPDATE_COMPOSER)%'
+            $timeout: '%env(int:LOCAL_UPDATE_COMMAND_TIMEOUT)%'
+
+    App\LocalUpdate\LocalUpdater:
+        arguments:
+            $workDirectory: '%kernel.project_dir%/var/local-updates'
+            $projectDirectory: '%kernel.project_dir%'
+            $backupsKept: '%env(int:LOCAL_UPDATE_BACKUPS_KEPT)%'
 
 when@test:
     services:
