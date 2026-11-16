@@ -1,0 +1,76 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mise à jour{% endblock %}
+
+{% block body %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h1 class="h3 mb-0"><i class="bi bi-cloud-arrow-down text-primary" aria-hidden="true"></i> Mise à jour de Jira Tools</h1>
+        <a href="{{ path('app_local_update_edit') }}" class="btn btn-outline-secondary"><i class="bi bi-gear" aria-hidden="true"></i> Paramètres</a>
+    </div>
+    <p class="text-muted">Met à jour <strong>cette installation de Jira Tools</strong> : téléchargement du code depuis Git (archive zip), copie dans le dossier de Jira Tools en conservant <code>.env.local</code>, <code>var/</code>, <code>vendor/</code>…, puis lancement des commandes (composer, schéma de la base, cache:clear).
+        En ligne de commande : <code>php bin/console app:local-update</code>.</p>
+
+    {% if running %}
+        <div class="alert alert-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Une mise à jour est en cours : voir l'historique ci-dessous.</div>
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-7">
+            <form method="post" action="{{ path('app_local_update_run') }}" class="card shadow-sm h-100" data-loader="Lancement de la mise à jour…">
+                <div class="card-header fw-semibold"><i class="bi bi-play-circle" aria-hidden="true"></i> Lancer la mise à jour</div>
+                <div class="card-body">
+                    <input type="hidden" name="_token" value="{{ csrf_token('local-update-run') }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="ref">Branche, tag ou commit</label>
+                        <input type="text" class="form-control font-monospace" id="ref" name="ref" value="{{ settings.ref }}">
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="deploy" value="1" id="deploy" checked>
+                        <label class="form-check-label" for="deploy"><strong>Télécharger le zip et le décompresser dans Jira Tools</strong>
+                            <span class="text-muted small d-block">Dépôt {{ settings.repository }} · protégés : {{ settings.preservedPathList|join(', ') ?: 'aucun' }}</span></label>
+                    </div>
+                    <fieldset class="mt-3">
+                        <legend class="fs-6 fw-semibold mb-1">Commandes</legend>
+                        {% for i, command in commands %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="commands[]" value="{{ i }}" id="cmd{{ i }}" checked>
+                                <label class="form-check-label font-monospace small" for="cmd{{ i }}" title="{{ command.expanded }}">{{ command.raw }}</label>
+                            </div>
+                        {% else %}
+                            <p class="text-muted small">Aucune commande paramétrée.</p>
+                        {% endfor %}
+                    </fieldset>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" name="dry_run" value="1" id="dry_run">
+                        <label class="form-check-label" for="dry_run">Simulation : lister les fichiers qui changeraient, sans rien écrire ni lancer</label>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center gap-3">
+                    <button class="btn btn-primary text-nowrap"{{ running ? ' disabled' }}><i class="bi bi-play-fill" aria-hidden="true"></i> Lancer</button>
+                    <span class="small text-muted">Le journal s'affiche en direct ; l'écran peut être indisponible quelques secondes pendant <code>composer install</code> et <code>cache:clear</code>.</span>
+                </div>
+            </form>
+        </div>
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Vérifications</div>
+                <ul class="list-group list-group-flush small">
+                    {% for check in checks %}
+                        <li class="list-group-item d-flex gap-2">
+                            <i class="bi {{ check.ok ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-danger' }}" aria-hidden="true"></i>
+                            <div class="min-w-0"><strong>{{ check.label }}</strong> <span class="visually-hidden">{{ check.ok ? 'correct' : 'à corriger' }}</span><div class="text-break font-monospace">{{ check.detail }}</div></div>
+                        </li>
+                    {% endfor %}
+                    <li class="list-group-item">
+                        <strong>Dernière version déployée</strong>
+                        <div class="font-monospace">{{ settings.lastVersion ?: '—' }}</div>
+                        <div class="text-muted">{{ settings.deployedFiles is null ? 'Aucun déploiement mémorisé.' : settings.deployedFiles|length ~ ' fichiers déployés' }}</div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h5">Historique</h2>
+    <div class="card shadow-sm">{{ include('local_update/_runs.html.twig', {runs: runs}) }}</div>
+{% endblock %}
