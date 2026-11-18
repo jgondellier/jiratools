@@ -23,6 +23,7 @@ services:
             - '../src/Confluence/ConfluencePageInfo.php'
             - '../src/Service/{IssueView,StatusAge,SprintReport,DeveloperActivity}.php'
             - '../src/Delivery/{DeliveryRow,DeliveryCalendar,DeliveryCheck,DateParser,ReleaseReadiness,DeliveryScope}.php'
+            - '../src/Release/{ReleaseContent,ReleaseTicket,RepositoryScan,TicketKeyExtractor}.php'
 
     # --- Connexions Atlassian -------------------------------------------------
     app.jira_http:
@@ -42,6 +43,20 @@ services:
             $user: '%env(CONFLUENCE_USER)%'
             $token: '%env(CONFLUENCE_API_TOKEN)%'
             $cacheTtl: '%env(int:APP_CACHE_TTL)%'
+
+    # GitLab : même socle HTTP (jeton envoyé en Bearer, cache, proxy et certificats communs)
+    app.gitlab_http:
+        class: App\Atlassian\AtlassianHttp
+        arguments:
+            $label: 'GitLab'
+            $baseUrl: '%env(GITLAB_BASE_URL)%'
+            $user: ''
+            $token: '%env(GITLAB_API_TOKEN)%'
+            $cacheTtl: '%env(int:APP_CACHE_TTL)%'
+
+    App\GitLab\GitLabClient:
+        arguments:
+            $gitlabHttp: '@app.gitlab_http'
 
     App\Atlassian\AtlassianHttp: '@app.jira_http'
 
@@ -94,4 +109,13 @@ when@test:
                 $baseUrl: '%env(CONFLUENCE_BASE_URL)%'
                 $user: '%env(CONFLUENCE_USER)%'
                 $token: '%env(CONFLUENCE_API_TOKEN)%'
+                $cacheTtl: 0
+        app.gitlab_http:
+            class: App\Atlassian\AtlassianHttp
+            arguments:
+                $httpClient: '@App\Tests\Functional\FakeJiraHttpClient'
+                $label: 'GitLab'
+                $baseUrl: '%env(GITLAB_BASE_URL)%'
+                $user: ''
+                $token: '%env(GITLAB_API_TOKEN)%'
                 $cacheTtl: 0

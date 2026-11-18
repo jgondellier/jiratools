@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Atlassian\AtlassianException;
 use App\Confluence\ConfluenceClient;
+use App\GitLab\GitLabClient;
 use App\Jira\JiraClient;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -16,6 +17,7 @@ class ConnectionController extends AbstractController
     public function index(
         JiraClient $jira,
         ConfluenceClient $confluence,
+        GitLabClient $gitlab,
         #[Autowire(env: 'bool:APP_HTTP_VERIFY_PEER')] bool $verifyPeer,
         #[Autowire(env: 'bool:APP_HTTP_VERIFY_HOST')] bool $verifyHost,
         #[Autowire(env: 'APP_HTTP_CAFILE')] string $cafile,
@@ -37,6 +39,18 @@ class ConnectionController extends AbstractController
             $checks['Confluence'] = ['ok' => true, 'message' => sprintf('Connecté en tant que %s', $me['displayName'] ?? $me['username'] ?? '?')];
         } catch (AtlassianException $e) {
             $checks['Confluence'] = ['ok' => false, 'message' => $e->getMessage()];
+        }
+
+        // GitLab est facultatif (écran « Contenu MEP »)
+        if ($gitlab->isConfigured()) {
+            try {
+                $me = $gitlab->currentUser();
+                $checks['GitLab'] = ['ok' => true, 'message' => sprintf('Connecté en tant que %s (%s)', $me['name'] ?? '?', $me['username'] ?? '?')];
+            } catch (AtlassianException $e) {
+                $checks['GitLab'] = ['ok' => false, 'message' => $e->getMessage()];
+            }
+        } else {
+            $checks['GitLab'] = ['ok' => null, 'message' => 'Non configuré (facultatif) : GITLAB_BASE_URL et GITLAB_API_TOKEN, pour l\'écran « Contenu MEP ».'];
         }
 
         // Le mot de passe éventuel du proxy n'est pas affiché

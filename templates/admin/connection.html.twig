@@ -1,15 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Connexion Jira / Confluence{% endblock %}
+{% block title %}Connexion Jira / Confluence / GitLab{% endblock %}
 
 {% block body %}
-    <h1 class="h3 mb-3"><i class="bi bi-plug"></i> Connexion Jira / Confluence</h1>
+    <h1 class="h3 mb-3"><i class="bi bi-plug"></i> Connexion Jira / Confluence / GitLab</h1>
     <div class="row g-3">
         {% for name, check in checks %}
             <div class="col-md-6">
-                <div class="card border-{{ check.ok ? 'success' : 'danger' }}">
+                <div class="card border-{{ check.ok is null ? 'secondary' : (check.ok ? 'success' : 'danger') }}">
                     <div class="card-body">
-                        <h2 class="h5">{% if check.ok %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %} {{ name }}</h2>
+                        <h2 class="h5">{% if check.ok is null %}<i class="bi bi-dash-circle text-secondary"></i>{% elseif check.ok %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %} {{ name }}</h2>
                         <p class="mb-0">{{ check.message }}</p>
                     </div>
                 </div>
@@ -33,6 +33,10 @@ JIRA_API_TOKEN=xxxxxxxx
 CONFLUENCE_BASE_URL=https://mon-site.atlassian.net/wiki
 CONFLUENCE_USER=prenom.nom@entreprise.fr
 CONFLUENCE_API_TOKEN=xxxxxxxx
+
+# GitLab, pour l'écran « Contenu MEP » (facultatif, jeton avec la portée read_api)
+GITLAB_BASE_URL=https://gitlab.mon-entreprise.fr
+GITLAB_API_TOKEN=glpat-xxxxxxxx
 
 # Réseau d'entreprise (facultatif)
 APP_HTTP_PROXY=http://proxy.entreprise.fr:8080

@@ -129,6 +129,50 @@ class AppTest extends WebTestCase
         self::assertSelectorTextContains('body', 'Calendrier des livraisons');
     }
 
+    public function testReleaseContentFromGitLab(): void
+    {
+        $this->em->persist((new Project())->setName('Portail')->setJiraProjectKey('APP')->setComponents(['Portail']));
+        $this->em->flush();
+
+        // Non paramétré : redirection vers le paramétrage
+        $this->client->request('GET', '/livraisons/contenu');
+        self::assertResponseRedirects('/parametrage/contenu-mep');
+
+        $crawler = $this->client->request('GET', '/parametrage/contenu-mep');
+        $this->client->submit($crawler->selectButton('Enregistrer et tester la lecture')->form([
+            'repositories' => 'https://gitlab.test/groupe/portail.git',
+            'branch' => 'develop',
+            'reference' => 'master',
+        ]));
+        self::assertResponseRedirects('/parametrage/contenu-mep');
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('textarea[name=repositories]', 'groupe/portail');
+        self::assertSelectorTextContains('body', '4 commit(s) dans develop absents de master, 1 merge request(s), 2 commit(s) hors merge request, 2 ticket(s) cité(s) : APP-1, APP-404');
+
+        // Version de la MEP par défaut : la prochaine version non livrée (1.4.2)
+        $crawler = $this->client->request('GET', '/livraisons/contenu');
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('h1', 'Contenu de la MEP');
+        $rows = $crawler->filter('table.delivery-table tbody tr');
+        self::assertCount(2, $rows);
+        self::assertStringContainsString('APP-404', $rows->eq(0)->text());
+        self::assertStringContainsString('Introuvable dans Jira', $rows->eq(0)->text());
+        self::assertStringContainsString('APP-1', $rows->eq(1)->text());
+        self::assertStringContainsString('À jour', $rows->eq(1)->text());
+        self::assertStringContainsString('!12 Export CSV', $rows->eq(1)->text());
+        self::assertStringNotContainsString('APP-50', $crawler->filter('body')->text(), 'MR déjà en production');
+        self::assertSelectorTextContains('body', 'APP-9');
+        self::assertSelectorTextContains('body', 'Hotfix libellé');
+
+        // Aucune version choisie : pas de contrôle de version ni de tickets "sans code"
+        $crawler = $this->client->request('GET', '/livraisons/contenu?v=1&problems=1');
+        self::assertCount(1, $crawler->filter('table.delivery-table tbody tr'));
+        self::assertSelectorTextNotContains('body', 'APP-9');
+
+        $this->client->request('GET', '/parametrage/connexion');
+        self::assertSelectorTextContains('body', 'Alice Martin (amartin)');
+    }
+
     /**
      * Coche les statuts donnés (colonne => statut) dans le paramétrage des statuts de travail.
      */

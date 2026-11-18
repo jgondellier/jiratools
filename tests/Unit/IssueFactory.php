@@ -24,7 +24,7 @@ final class IssueFactory
             assigneeAvatar: null,
             components: $o['components'] ?? [],
             labels: $o['labels'] ?? [],
-            fixVersions: [],
+            fixVersions: array_map(fn (array $v) => $v['name'], $o['versions'] ?? []),
             sprints: [],
             storyPoints: $o['storyPoints'] ?? null,
             flagged: false,
@@ -32,6 +32,9 @@ final class IssueFactory
             updated: null,
             resolved: null,
             statusSince: $o['statusSince'] ?? null,
+            parentKey: $o['parentKey'] ?? null,
+            // [['id' => '10', 'name' => '1.5.0', 'released' => false]]
+            versionDetails: array_map(fn (array $v) => $v + ['id' => '', 'releaseDate' => null, 'released' => false], $o['versions'] ?? []),
         );
     }
 }

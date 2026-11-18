@@ -1,0 +1,102 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Paramétrage du contenu des MEP{% endblock %}
+
+{% block body %}
+    <h1 class="h3 mb-3"><i class="bi bi-git"></i> Paramétrage du contenu des MEP</h1>
+
+    {% if not gitlab_configured %}
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i> GitLab n'est pas configuré : ajoutez dans le fichier <code>.env.local</code>
+            <pre class="mb-0 mt-2">GITLAB_BASE_URL=https://gitlab.mon-entreprise.fr
+GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
+            <div class="small mt-2">Jeton : GitLab → <em>Préférences → Jetons d'accès</em>, portée <strong>read_api</strong> (lecture seule). Testez ensuite dans <a href="{{ path('admin_connection') }}">Tester la connexion</a>.</div>
+        </div>
+    {% endif %}
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <form class="card" method="post">
+                <div class="card-body">
+                    <input type="hidden" name="_token" value="{{ csrf_token('release_content') }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="repositories">Dépôts GitLab</label>
+                        <textarea class="form-control font-monospace" name="repositories" id="repositories" rows="4" placeholder="mon-groupe/portail-front&#10;mon-groupe/portail-api | v2.3.0">{{ repositories_text }}</textarea>
+                        <div class="form-text">
+                            Un dépôt par ligne : chemin <code>groupe/projet</code> (l'URL du dépôt est acceptée) ou identifiant numérique.
+                            Pour un dépôt qui ne suit pas les valeurs ci-dessous : <code>groupe/projet | référence | branche</code>.
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label" for="branch">Branche livrée</label>
+                            <input class="form-control" name="branch" id="branch" value="{{ settings.branch }}">
+                            <div class="form-text">Tout son contenu part à la MEP.</div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label" for="reference">Production (branche ou tag)</label>
+                            <input class="form-control" name="reference" id="reference" value="{{ settings.reference }}" placeholder="dernier tag">
+                            <div class="form-text">Ce qui est déjà en production, ex. <code>master</code>, <code>main</code>. Vide = dernier tag du dépôt.</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="ticketProjects">Projets Jira à reconnaître dans les commits</label>
+                        <input class="form-control" name="ticketProjects" id="ticketProjects" value="{{ settings.ticketProjects|join(', ') }}" placeholder="{{ default_keys ? default_keys|join(', ') : 'APP, WS' }}">
+                        <div class="form-text">
+                            Clés de projets séparées par des virgules. Vide : vos projets et les projets web services
+                            {%- if default_keys %} (actuellement <strong>{{ default_keys|join(', ') }}</strong>){% endif %}.
+                            Les clés sont reconnues dans le titre, la branche et la description des merge requests et dans les messages de commits,
+                            sans tenir compte des majuscules (<code>feature/app-123-export</code>).
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="expectedStatuses">Statuts attendus pour un ticket livré <span class="text-muted">(facultatif)</span></label>
+                        <textarea class="form-control" name="expectedStatuses" id="expectedStatuses" rows="2" placeholder="Prêt pour MEP&#10;Terminé">{{ settings.expectedStatuses|join("\n") }}</textarea>
+                        <div class="form-text">
+                            Un statut par ligne. Un ticket dont le code est dans la branche livrée et qui est dans un autre statut est signalé.
+                            Vide : tout statut de la catégorie <em>Terminé</em> convient ; <em>En cours</em> est signalé en orange, <em>À faire</em> en rouge.
+                        </div>
+                    </div>
+                    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
+                    {% if settings.configured and gitlab_configured %}<a href="{{ path('release_content') }}" class="btn btn-outline-secondary">Voir le contenu de la MEP</a>{% endif %}
+                </div>
+            </form>
+        </div>
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-git"></i> Lecture des dépôts{% if gitlab_url %} <span class="text-muted small">({{ gitlab_url }})</span>{% endif %}</div>
+                <div class="card-body small">
+                    {% for scan in scans %}
+                        <div class="mb-3">
+                            <strong>{% if scan.webUrl %}<a href="{{ scan.webUrl }}" target="_blank" rel="noopener">{{ scan.label }}</a>{% else %}{{ scan.path }}{% endif %}</strong>
+                            {% if scan.error %}
+                                <div class="text-danger"><i class="bi bi-x-circle"></i> {{ scan.error }}</div>
+                            {% else %}
+                                <div class="text-success">
+                                    <i class="bi bi-check-circle"></i>
+                                    {{ scan.commitCount }} commit(s) dans <code>{{ scan.branch }}</code> absents de <code>{{ scan.reference }}</code>,
+                                    {{ scan.mergeRequests|length }} merge request(s), {{ scan.directCommits|length }} commit(s) hors merge request,
+                                    {{ scan.keys|length }} ticket(s) cité(s){% if scan.keys %} : {{ scan.keys|slice(0, 15)|join(', ') }}{% if scan.keys|length > 15 %}…{% endif %}{% endif %}.
+                                    {% if scan.compareUrl %}<a href="{{ scan.compareUrl }}" target="_blank" rel="noopener">Comparer dans GitLab</a>{% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">{{ gitlab_configured ? 'Aucun dépôt paramétré.' : 'GitLab n\'est pas configuré.' }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><i class="bi bi-info-circle"></i> Fonctionnement</div>
+                <div class="card-body small">
+                    <ul class="mb-0">
+                        <li>Le contenu de la MEP = les commits de la <strong>branche livrée</strong> absents de la <strong>production</strong> (équivalent de <code>git log production..develop</code>).</li>
+                        <li>Chaque commit est rattaché à sa <strong>merge request</strong> fusionnée ; les commits poussés sans merge request sont listés à part.</li>
+                        <li>Les tickets cités sont relus dans Jira : statut, version corrective (fixVersion) comparée à la version de la MEP choisie à l'écran.</li>
+                        <li>À l'inverse, les tickets de la version de la MEP sans aucun code sont signalés, ainsi que les merge requests et commits sans ticket.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

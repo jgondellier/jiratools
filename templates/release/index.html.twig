@@ -1,0 +1,212 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Contenu de la MEP{% endblock %}
+
+{% macro level_icon(level) %}
+    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>
+    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
+    {%- else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif -%}
+{% endmacro %}
+
+{% block body %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0"><i class="bi bi-git"></i> Contenu de la MEP</h1>
+        <form class="d-flex flex-wrap gap-2 align-items-center" method="get" id="release-form">
+            <input type="hidden" name="v" value="1">
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                    <i class="bi bi-box-seam"></i>
+                    {% if content.targetVersions %}Version : {{ content.targetVersions|join(', ') }}{% else %}Aucune version choisie{% endif %}
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 280px; max-height: 420px; overflow: auto">
+                    {% for v in content.candidates %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="versions[]" value="{{ v.id }}" id="v{{ v.id }}" {{ content.targetVersions[v.id] is defined ? 'checked' }}>
+                            <label class="form-check-label small" for="v{{ v.id }}">
+                                <strong>{{ v.projectKey }}</strong> {{ v.name }}
+                                <span class="text-muted">{{ v.releaseDate ? v.releaseDate|date('d/m/Y') : 'sans date' }}</span>
+                            </label>
+                        </div>
+                    {% else %}
+                        <div class="small text-muted">Aucune version non livrée dans vos projets Jira.</div>
+                    {% endfor %}
+                    <button class="btn btn-sm btn-primary mt-2 w-100">Appliquer</button>
+                </div>
+            </div>
+            <div class="form-check form-switch text-nowrap">
+                <input class="form-check-input" type="checkbox" name="problems" value="1" id="problems" {{ only_problems ? 'checked' }} onchange="this.form.submit()">
+                <label class="form-check-label small" for="problems">Problèmes uniquement</label>
+            </div>
+            <button class="btn btn-sm btn-primary" name="refresh" value="1" title="Relire GitLab et Jira"><i class="bi bi-arrow-clockwise"></i></button>
+            <a href="{{ path('admin_release_content') }}" class="btn btn-sm btn-outline-secondary" title="Paramétrage"><i class="bi bi-gear"></i></a>
+        </form>
+    </div>
+
+    <p class="text-muted small mb-3">
+        Code de la branche <code>{{ settings.branch }}</code> pas encore en production
+        (<code>{{ settings.reference ?: 'dernier tag' }}</code>), d'après les merge requests et commits GitLab,
+        comparé à Jira{% if content.targetVersions %} et à la version <strong>{{ content.targetVersions|join(', ') }}</strong>{% endif %}.
+    </p>
+
+    {% for scan in content.repositoryErrors %}
+        <div class="alert alert-danger py-2"><i class="bi bi-x-circle"></i> <strong>{{ scan.label }}</strong> : {{ scan.error }}</div>
+    {% endfor %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-ticket-detailed"></i> Tickets dans le code</div><div class="display-6">{{ content.tickets|length }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-x-octagon"></i> Jira à corriger</div><div class="display-6">{{ counts.error }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ content.missing ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-question-octagon"></i> Dans la version, sans code</div><div class="display-6">{{ content.targetVersions ? content.missing|length : '–' }}</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="card stat-card h-100 {{ content.untracked ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-patch-question"></i> MR / commits sans ticket</div><div class="display-6">{{ content.untracked|length }}</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span><i class="bi bi-ticket-detailed"></i> Tickets livrés par cette MEP</span>
+            <span class="d-flex gap-2">
+                {% if fix_url %}<a href="{{ fix_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger"><i class="bi bi-pencil-square"></i> Ouvrir les tickets à corriger dans Jira</a>{% endif %}
+                {% if all_url %}<a href="{{ all_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Tous dans Jira</a>{% endif %}
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle delivery-table">
+                <thead class="table-light">
+                    <tr><th>Ticket</th><th>Statut</th><th>Version</th><th>Contrôle</th><th>Code</th></tr>
+                </thead>
+                <tbody>
+                {% for ticket in tickets %}
+                    {% set issue = ticket.issue %}
+                    <tr class="level-row-{{ ticket.level }}">
+                        <td style="min-width: 260px">
+                            {% if issue %}
+                                <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
+                                {% if issue.key != ticket.key %}<span class="small text-muted">(cité « {{ ticket.key }} »)</span>{% endif %}
+                                <span class="small text-muted">{{ issue.type }}</span>
+                                <div class="small">{{ issue.summary }}</div>
+                                {% if ticket.parent %}<div class="small text-muted">Sous-tâche de <a href="{{ ticket.parent.url }}" target="_blank" rel="noopener">{{ ticket.parent.key }}</a> {{ ticket.parent.summary }}</div>{% endif %}
+                            {% else %}
+                                <span class="fw-semibold">{{ ticket.key }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if issue %}<span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>{% endif %}</td>
+                        <td class="small">
+                            {% if issue %}
+                                {% for v in issue.versionDetails %}
+                                    <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : (v.released ? 'text-bg-light border' : 'text-bg-warning') }}">{{ v.name }}</span>
+                                {% else %}
+                                    {% for v in ticket.parent.versionDetails ?? [] %}
+                                        <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : 'text-bg-light border' }}" title="Version du ticket parent">{{ v.name }} <i class="bi bi-arrow-90deg-up"></i></span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% for problem in ticket.problems %}
+                                <div>{{ _self.level_icon(problem.level) }} {{ problem.message }}</div>
+                            {% else %}
+                                {{ _self.level_icon('ok') }} À jour
+                            {% endfor %}
+                        </td>
+                        <td class="small" style="min-width: 220px">
+                            {% for source in ticket.sources %}
+                                <div class="text-truncate" style="max-width: 360px" title="{{ source.repository }} · {{ source.author }}{{ source.date ? ' · ' ~ source.date|date('d/m/Y') }}">
+                                    <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                                    <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.label }}</a>
+                                    {% if content.repositories|length > 1 %}<span class="text-muted">· {{ source.repository }}</span>{% endif %}
+                                </div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5" class="text-muted text-center py-3">{{ only_problems ? 'Aucun problème : Jira est à jour.' : 'Aucun ticket cité dans le code à livrer.' }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if content.targetVersions %}
+        <div class="card mb-3 {{ content.missing ? 'border-danger' }}">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span><i class="bi bi-question-octagon"></i> Dans la version {{ content.targetVersions|join(', ') }} mais sans merge request ni commit ({{ content.missing|length }})</span>
+                {% if version_url %}<a href="{{ version_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Version dans Jira</a>{% endif %}
+            </div>
+            {% if content.missing %}
+                <div class="card-body small pb-1">
+                    Ces tickets sont annoncés dans la version mais leur code n'est pas dans <code>{{ settings.branch }}</code> :
+                    pas encore fusionné, commit sans la clé du ticket, ou ticket sans code (paramétrage, documentation…). À retirer de la version s'ils ne partent pas.
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for issue in content.missing %}
+                        <li class="list-group-item small">
+                            <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold">{{ issue.key }}</a>
+                            <span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>
+                            {{ issue.summary }}
+                            <span class="text-muted">· {{ issue.type }}{{ issue.assigneeName ? ' · ' ~ issue.assigneeName }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="card-body small text-success"><i class="bi bi-check-circle"></i> Tous les tickets de la version sont dans le code.</div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-patch-question"></i> Merge requests et commits sans ticket ({{ content.untracked|length }})</div>
+        {% if content.untracked %}
+            <ul class="list-group list-group-flush">
+                {% for item in content.untracked %}
+                    <li class="list-group-item small">
+                        <i class="bi bi-{{ item.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                        <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.label }}</a>
+                        {% if item.detail %}<code class="ms-1">{{ item.detail }}</code>{% endif %}
+                        <span class="text-muted">· {{ item.author }}{{ item.date ? ' · ' ~ item.date|date('d/m/Y') }}{% if content.repositories|length > 1 %} · {{ item.repository }}{% endif %}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="card-body small text-success"><i class="bi bi-check-circle"></i> Tout le code est rattaché à un ticket.</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><i class="bi bi-git"></i> Dépôts lus</div>
+        <ul class="list-group list-group-flush">
+            {% for scan in content.repositories %}
+                <li class="list-group-item small">
+                    <strong>{% if scan.webUrl %}<a href="{{ scan.webUrl }}" target="_blank" rel="noopener">{{ scan.label }}</a>{% else %}{{ scan.path }}{% endif %}</strong>
+                    {% if scan.error %}
+                        <span class="text-danger">— {{ scan.error }}</span>
+                    {% else %}
+                        — <code>{{ scan.reference }}..{{ scan.branch }}</code> : {{ scan.commitCount }} commit(s), {{ scan.mergeRequests|length }} merge request(s), {{ scan.directCommits|length }} commit(s) hors merge request
+                        {% if scan.compareUrl %}· <a href="{{ scan.compareUrl }}" target="_blank" rel="noopener">comparer</a>{% endif %}
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+        <div class="card-footer small text-muted">Clés reconnues : {{ content.projectKeys|join(', ') ?: 'toute clé en majuscules' }}</div>
+    </div>
+{% endblock %}

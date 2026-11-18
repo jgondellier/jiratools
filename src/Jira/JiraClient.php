@@ -235,6 +235,41 @@ class JiraClient
     }
 
     /**
+     * Tickets lus un par un par leur clé (en parallèle). Contrairement à une recherche "key in (...)",
+     * une clé inexistante ne fait pas échouer l'ensemble : elle est renvoyée à null.
+     *
+     * @param string[] $keys
+     *
+     * @return array<string, ?Issue> clé demandée => ticket (null si introuvable ou non lisible)
+     */
+    public function getIssues(array $keys, array $extraFields = []): array
+    {
+        $fields = implode(',', array_values(array_unique(array_filter(array_merge(
+            self::BASE_FIELDS,
+            [$this->storyPointsField, $this->sprintField, $this->flaggedField],
+            $extraFields,
+        )))));
+        $requests = [];
+        foreach (array_unique($keys) as $key) {
+            $requests[$key] = ['rest/api/2/issue/'.rawurlencode($key), ['fields' => $fields]];
+        }
+
+        $result = [];
+        foreach ($this->jiraHttp->getMany($requests) as $key => $data) {
+            if ($data instanceof AtlassianException) {
+                if (\in_array($data->getCode(), [403, 404], true)) {
+                    $result[$key] = null;
+                    continue;
+                }
+                throw $data;
+            }
+            $result[$key] = $this->mapIssue($data);
+        }
+
+        return $result;
+    }
+
+    /**
      * JQL telle qu'envoyée à Jira (tri par rang adapté), pour l'affichage et les liens.
      */
     public function effectiveJql(string $jql): string
