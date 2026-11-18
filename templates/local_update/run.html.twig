@@ -1,0 +1,90 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mise à jour · Journal{% endblock %}
+
+{% block body %}
+    {{ include('local_update/_header.html.twig', {icon: 'journal-text', title: 'Mise à jour du ' ~ run.startedAt|date('d/m/Y H:i'), actions: [
+        {url: path('app_local_update_index'), icon: 'arrow-repeat', label: 'Relancer / historique', color: 'primary'},
+    ]}) }}
+
+    <div class="d-flex flex-wrap gap-3 align-items-center mb-3" aria-live="polite">
+        <span id="run-status">{{ include('local_update/_status.html.twig', {status: run.status}) }}</span>
+        <span>Réf. <code>{{ run.ref }}</code></span>
+        {% if run.version %}<span class="text-muted">Version {{ run.version }}</span>{% endif %}
+        {% if run.durationSeconds is not null %}<span class="text-muted">{{ run.durationSeconds }} s</span>{% endif %}
+        {% set files = run.summary.files ?? null %}
+        {% if files %}<span><span class="text-success">+{{ files.added }}</span> · <span class="text-primary">~{{ files.modified }}</span> · <span class="text-danger">−{{ files.deleted }}</span> · {{ files.unchanged }} inchangé(s)</span>{% endif %}
+        {% if not run.finished %}<span class="small text-muted"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Journal actualisé automatiquement</span>{% endif %}
+    </div>
+
+    {% if run.status == 'pending' %}
+        <div class="alert alert-secondary d-none" id="pending-warning">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Le traitement en arrière-plan n'a pas démarré.
+            Vérifiez <code>APP_UPDATE_PHP_BINARY</code> (chemin de <code>php.exe</code>) et le fichier <code>var/local-updates/worker.log</code>,
+            ou passez <code>APP_UPDATE_BACKGROUND=0</code> dans <code>.env.local</code> pour exécuter la mise à jour dans la page.
+        </div>
+    {% endif %}
+
+    {% if run.summary.commands ?? [] %}
+        <div class="card shadow-sm mb-3">
+            <ul class="list-group list-group-flush small">
+                {% for c in run.summary.commands %}
+                    <li class="list-group-item d-flex justify-content-between gap-2">
+                        <span class="font-monospace">{{ c.command }}</span>
+                        {% if c.exitCode is null %}<span class="text-muted">non lancée (simulation)</span>
+                        {% elseif c.exitCode == 0 %}<span class="text-success text-nowrap"><i class="bi bi-check-lg" aria-hidden="true"></i> {{ c.seconds }} s</span>
+                        {% else %}<span class="text-danger text-nowrap"><i class="bi bi-x-lg" aria-hidden="true"></i> code {{ c.exitCode }}</span>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-end mb-1">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-copy="#run-log"><i class="bi bi-clipboard" aria-hidden="true"></i> Copier</button>
+    </div>
+    <pre id="run-log" class="run-log" tabindex="0">{{ run.log ?: 'Démarrage…' }}</pre>
+{% endblock %}
+
+{% block stylesheets %}
+<style>
+    .run-log { background: #1e1e1e; color: #e6e6e6; padding: 1rem; border-radius: .375rem; max-height: 70vh; overflow: auto; font-size: .8rem; white-space: pre-wrap; word-break: break-word; }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+    document.querySelectorAll('[data-copy]').forEach((button) => button.addEventListener('click', () => {
+        navigator.clipboard?.writeText(document.querySelector(button.dataset.copy).textContent);
+    }));
+</script>
+{% if not run.finished %}
+<script>
+    (function () {
+        const pre = document.getElementById('run-log');
+        const status = document.getElementById('run-status');
+        const url = {{ path('app_local_update_run_log', {id: run.id})|json_encode|raw }};
+        const tick = async () => {
+            try {
+                const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (response.ok) {
+                    const data = await response.json();
+                    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+                    if (data.log) { pre.textContent = data.log; }
+                    if (atBottom) { pre.scrollTop = pre.scrollHeight; }
+                    if (data.finished) { window.location.reload(); return; }
+                    if (data.status === 'running') { status.innerHTML = '<span class="badge text-bg-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i> En cours</span>'; }
+                    const warning = document.getElementById('pending-warning');
+                    if (warning && data.status === 'pending' && data.waiting > 30) { warning.classList.remove('d-none'); }
+                }
+            } catch (e) {
+                // Jira Tools peut être indisponible quelques secondes pendant sa propre mise à jour : on réessaie
+            }
+            setTimeout(tick, 2000);
+        };
+        pre.scrollTop = pre.scrollHeight;
+        setTimeout(tick, 1500);
+    })();
+</script>
+{% endif %}
+{% endblock %}

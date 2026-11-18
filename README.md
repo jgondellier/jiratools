@@ -11,6 +11,7 @@ Application Symfony 7.4 (LTS) / PHP 8.2+ pour suivre vos équipes et vos projets
 | **Contenu MEP** | Ce qui part à la prochaine mise en production : tous les commits de la branche livrée (`develop`) absents de la production (`master` ou dernier tag), lus dans **GitLab** et rattachés à leur **merge request**. Les **tickets Jira cités** (titre, branche, description des MR, messages de commits) sont relus dans Jira et contrôlés : statut (pas commencé, encore en cours, ou hors des statuts attendus), **version corrective** absente, différente ou déjà livrée par rapport à la version de la MEP choisie, ticket introuvable. À l'inverse : tickets de la version **sans aucun code**, et merge requests / commits **sans ticket**. Bouton pour ouvrir dans Jira les tickets à corriger. |
 | **Suivi & alertes** | Tickets qui traînent au-delà du seuil de leur statut, tickets bloqués (drapeau), sprint : non estimés / non assignés, tickets sans composant, vieux bugs, tickets réouverts, pages Confluence obsolètes. |
 | **Projets** | Fiche projet : équipes, composants, board, pages Confluence rattachées (avec date de dernière modification), sprint en cours, tickets qui traînent. |
+| **Mises à jour de l'application** | Met à jour cette installation depuis GitHub en un clic : téléchargement du zip d'une branche ou d'un tag, copie en conservant `.env.local`, `var/`, `vendor/`…, puis `composer install`, mise à jour de la base et `cache:clear`, avec le journal en direct. Accessible uniquement depuis le poste. |
 | **Paramétrage** | Équipes, membres (import depuis Jira), projets (projet Jira + composants + board), pages Confluence, statuts de travail par rôle, seuils d'alerte par statut, test de connexion. |
 
 ## Installation sous EasyPHP (Windows)
@@ -108,6 +109,55 @@ Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectiv
 | `APP_HTTP_TIMEOUT` | `30` | Délai maximal sans réponse, en secondes |
 
 **Erreur « SSL certificate problem: unable to get local issuer certificate » sous Windows** : PHP ne connaît pas l'autorité qui a signé le certificat (souvent un proxy d'entreprise qui inspecte le SSL). Exportez le certificat racine de l'entreprise (depuis le navigateur, au format *Base64 / PEM*) et indiquez son chemin dans `APP_HTTP_CAFILE`, plutôt que de mettre `APP_HTTP_VERIFY_PEER=0`.
+
+## Mises à jour de l'application (zip Git + commandes)
+
+Menu **Paramétrage → Mises à jour de l'application** (accessible **uniquement depuis le poste**, `127.0.0.1`) ou commande `app:local-update` : met à jour **cette installation de Jira Tools**, et elle seule. Le dossier mis à jour est toujours celui où l'application est installée.
+
+1. **Téléchargement** de l'archive zip du dépôt (par défaut `jgondellier/jiratools` sur GitHub, branche `main`) pour une branche, un tag ou un commit ;
+2. **Copie dans le dossier de l'application** : les fichiers protégés (`.env.local`, `.env.*.local`, `var/`, `vendor/`, `.git/`…) ne sont jamais écrasés ; seuls les fichiers modifiés sont réécrits ; un fichier retiré du dépôt n'est supprimé que s'il avait été déposé par la mise à jour précédente (rien n'est supprimé à la première mise à jour) ; les fichiers remplacés ou supprimés sont sauvegardés dans `var/local-updates/backups/` (5 dernières mises à jour) ;
+3. **Commandes**, dans l'ordre — par défaut :
+
+```
+{composer} install --no-interaction --optimize-autoloader
+php bin/console doctrine:schema:update --force
+php bin/console cache:clear
+```
+
+`php` en début de ligne est remplacé par `APP_UPDATE_PHP_BINARY` ; `{composer}` lance Composer : `APP_UPDATE_COMPOSER` s'il est renseigné, sinon `php composer.phar` si `composer.phar` se trouve à la racine de l'application (ou à côté de `php.exe`), sinon la commande `composer` du PATH. Une ligne commençant par `#` est ignorée. Par défaut, la mise à jour s'arrête à la première commande en erreur.
+
+**Paramètres** (*Mises à jour → Paramètres*) : hébergement et dépôt (GitHub, GitLab — y compris auto-hébergé —, Bitbucket ou URL du zip avec `{ref}`), branche par défaut, jeton, fichiers protégés, commandes, variables d'environnement des commandes, options (suppression des fichiers retirés, sauvegarde, arrêt à la première erreur).
+
+**Jeton (dépôt privé)** : laissez `env:GITHUB_TOKEN` dans le champ *Jeton* et ajoutez dans `.env.local` :
+
+```dotenv
+GITHUB_TOKEN=github_pat_xxx
+```
+
+Création sur GitHub : *Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token*, *Only select repositories* → `jiratools`, permission *Contents : Read-only*.
+
+L'écran affiche les **vérifications** (URL du zip et authentification, dossier modifiable, PHP et Composer utilisés), permet une **simulation** (liste des fichiers qui changeraient, sans rien écrire ni lancer) et garde l'historique. La mise à jour tourne dans un **processus PHP séparé** et le **journal s'affiche en direct** ; l'écran peut être indisponible quelques secondes pendant `composer install` / `cache:clear`.
+
+Le téléchargement utilise les réglages réseau `APP_HTTP_PROXY`, `APP_HTTP_CAFILE` (ajouté aux autorités publiques, PEM ou DER) et `APP_HTTP_VERIFY_PEER`.
+
+```bat
+php bin/console app:local-update                        &rem mise à jour complète
+php bin/console app:local-update --ref=develop --dry-run
+php bin/console app:local-update --no-deploy            &rem commandes seules
+```
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `APP_UPDATE_PHP_BINARY` | *(vide)* | Exécutable PHP. **Sous EasyPHP / Apache, renseignez-le**, ex. `C:/EasyPHP/eds-binaries/php/php829vs16x64/php.exe` |
+| `APP_UPDATE_COMPOSER` | *(vide)* | Commande Composer. Ex. `"{php} C:/composer/composer.phar"` (`{php}` = `APP_UPDATE_PHP_BINARY`) |
+| `APP_UPDATE_BACKGROUND` | `1` | `0` : la mise à jour s'exécute dans la requête (la page attend la fin) |
+| `APP_UPDATE_COMMAND_TIMEOUT` | `1800` | Durée maximale d'une commande (s, 0 = illimitée) |
+| `APP_UPDATE_BACKUPS_KEPT` | `5` | Sauvegardes conservées |
+| `APP_UPDATE_ALLOW_REMOTE` | `0` | `1` rend l'écran accessible depuis un autre poste (déconseillé : il lance des commandes sur ce poste) |
+
+Si le journal reste « En attente » : vérifiez `APP_UPDATE_PHP_BINARY` et `var/local-updates/worker.log`, ou passez `APP_UPDATE_BACKGROUND=0`. Si Composer échoue depuis Apache faute de dossier utilisateur, ajoutez `COMPOSER_HOME=C:/Users/<vous>/AppData/Roaming/Composer` dans les variables d'environnement des paramètres.
+
+> **Première installation de cette fonctionnalité** : récupérez une dernière fois le code à la main, puis lancez `composer install` et `composer setup` (nouvelles dépendances et nouvelles tables). Les mises à jour suivantes se font depuis l'écran.
 
 ## Fonctionnement
 
