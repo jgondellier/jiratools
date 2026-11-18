@@ -46,6 +46,27 @@ class AppTest extends WebTestCase
         self::assertSelectorTextContains('table', 'Équipe Alpha');
     }
 
+    public function testRedirectAfterSaveStaysInTheApplication(): void
+    {
+        foreach (['/\\attaquant.example' => '/parametrage/equipes', '//attaquant.example' => '/parametrage/equipes', '/projets' => '/projets'] as $redirect => $expected) {
+            $crawler = $this->client->request('GET', '/parametrage/equipes/nouvelle?redirect='.rawurlencode($redirect));
+            $this->client->submit($crawler->selectButton('Enregistrer')->form(['team[name]' => 'Équipe '.md5($redirect), 'team[wipLimit]' => 3]));
+            self::assertResponseRedirects($expected);
+        }
+    }
+
+    public function testSecurityHeadersAndDesignSystemLayout(): void
+    {
+        $crawler = $this->client->request('GET', '/');
+        self::assertResponseHeaderSame('X-Frame-Options', 'DENY');
+        self::assertResponseHeaderSame('X-Content-Type-Options', 'nosniff');
+        self::assertStringContainsString("frame-ancestors 'none'", (string) $this->client->getResponse()->headers->get('Content-Security-Policy'));
+        self::assertCount(1, $crawler->filter('header.o-header a.a-skipLink[href="#contenu"]'));
+        self::assertCount(1, $crawler->filter('main#contenu'));
+        self::assertCount(1, $crawler->filter('h1'));
+        self::assertCount(1, $crawler->filter('footer.o-footer[role="contentinfo"]'));
+    }
+
     public function testStatusRuleValidation(): void
     {
         $crawler = $this->client->request('GET', '/parametrage/seuils-statuts/nouveau');

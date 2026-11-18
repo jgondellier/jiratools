@@ -25,8 +25,8 @@ class Team
 
     /** Couleur d'affichage (hexadécimal) */
     #[ORM\Column(length: 7)]
-    #[Assert\Regex('/^#[0-9a-fA-F]{6}$/', message: 'Couleur hexadécimale attendue (ex : #0d6efd)')]
-    private string $color = '#0d6efd';
+    #[Assert\Regex('/^#[0-9a-fA-F]{6}$/', message: 'Couleur hexadécimale attendue (ex : #0d7d50)')]
+    private string $color = '#0d7d50';
 
     /** Nombre maximum de tickets "en cours" par développeur avant alerte */
     #[ORM\Column]

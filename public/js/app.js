@@ -1,3 +1,15 @@
+// Accessibilité (design system Cardif) : icônes décoratives masquées aux lecteurs d'écran,
+// boutons et liens « icône seule » nommés d'après leur info-bulle.
+const enhanceA11y = (root) => {
+    root.querySelectorAll('i.bi:not([aria-hidden])').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));
+    root.querySelectorAll('a[title]:not([aria-label]), button[title]:not([aria-label])').forEach((el) => {
+        if ('' === el.textContent.trim()) {
+            el.setAttribute('aria-label', el.getAttribute('title'));
+        }
+    });
+};
+enhanceA11y(document);
+
 // Rafraîchissement automatique d'un bloc : <div data-autorefresh="120" data-url="...">
 document.querySelectorAll('[data-autorefresh]').forEach((el) => {
     const seconds = parseInt(el.dataset.autorefresh, 10);
@@ -19,6 +31,7 @@ document.querySelectorAll('[data-autorefresh]').forEach((el) => {
             const response = await fetch(el.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (response.ok) {
                 el.innerHTML = await response.text();
+                enhanceA11y(el);
             }
         } catch (e) {
             console.warn('Rafraîchissement impossible', e);
@@ -42,7 +55,7 @@ document.querySelectorAll('[data-copy-target]').forEach((btn) => {
                 await navigator.clipboard.writeText(text);
             }
             const original = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check2"></i> Copié';
+            btn.innerHTML = '<i class="bi bi-check2" aria-hidden="true"></i> Copié';
             setTimeout(() => { btn.innerHTML = original; }, 1500);
         } catch (e) {
             alert('Copie impossible : sélectionnez le texte manuellement.');

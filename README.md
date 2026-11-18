@@ -112,7 +112,7 @@ Elles s'appliquent à tous les appels Jira et Confluence. Leurs valeurs effectiv
 
 ## Mises à jour de l'application (zip Git + commandes)
 
-Menu **Paramétrage → Mises à jour de l'application** (accessible **uniquement depuis le poste**, `127.0.0.1`) ou commande `app:local-update` : met à jour **cette installation de Jira Tools**, et elle seule. Le dossier mis à jour est toujours celui où l'application est installée.
+Menu **Paramétrage → Mises à jour de l'application** (accessible **uniquement depuis le poste**, à l'adresse `http://localhost/…` ou `http://127.0.0.1/…` : un autre nom, même pointant vers le poste, est refusé) ou commande `app:local-update` : met à jour **cette installation de Jira Tools**, et elle seule. Le dossier mis à jour est toujours celui où l'application est installée.
 
 1. **Téléchargement** de l'archive zip du dépôt (par défaut `jgondellier/jiratools` sur GitHub, branche `main`) pour une branche, un tag ou un commit ;
 2. **Copie dans le dossier de l'application** : les fichiers protégés (`.env.local`, `.env.*.local`, `var/`, `vendor/`, `.git/`…) ne sont jamais écrasés ; seuls les fichiers modifiés sont réécrits ; un fichier retiré du dépôt n'est supprimé que s'il avait été déposé par la mise à jour précédente (rien n'est supprimé à la première mise à jour) ; les fichiers remplacés ou supprimés sont sauvegardés dans `var/local-updates/backups/` (5 dernières mises à jour) ;
@@ -158,6 +158,12 @@ php bin/console app:local-update --no-deploy            &rem commandes seules
 Si le journal reste « En attente » : vérifiez `APP_UPDATE_PHP_BINARY` et `var/local-updates/worker.log`, ou passez `APP_UPDATE_BACKGROUND=0`. Si Composer échoue depuis Apache faute de dossier utilisateur, ajoutez `COMPOSER_HOME=C:/Users/<vous>/AppData/Roaming/Composer` dans les variables d'environnement des paramètres.
 
 > **Première installation de cette fonctionnalité** : récupérez une dernière fois le code à la main, puis lancez `composer install` et `composer setup` (nouvelles dépendances et nouvelles tables). Les mises à jour suivantes se font depuis l'écran.
+
+## Charte graphique et sécurité
+
+- L'interface suit le design system **Cardif Digital Platform v2.2** : police Open Sans (hébergée dans `public/vendor/open-sans`, licence SIL OFL), couleurs de `public/css/tokens.css` (vert `green-700` pour les actions et l'identité, rouge / orange / bleu réservés aux statuts erreur / avertissement / information), boutons en pilule, en-tête blanc avec lien d'évitement « Aller au contenu », pied de page vert. Bootstrap 5 reste le moteur (grille, utilitaires, menus) ; `public/css/app.css` l'aligne sur les tokens. Les icônes restent celles de Bootstrap Icons (la police Icomoon du thème officiel n'est pas distribuée).
+- Toutes les pages sont servies avec des en-têtes de sécurité (affichage dans un cadre d'un autre site interdit, formulaires envoyés uniquement à l'application, pas de transmission de l'adresse des pages aux sites externes).
+- **L'application n'a pas d'authentification** : en usage partagé, protégez-la au niveau du serveur web (authentification Apache, réseau restreint). Le paramétrage est modifiable par toute personne qui y accède.
 
 ## Fonctionnement
 
