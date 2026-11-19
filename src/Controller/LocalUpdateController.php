@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\LocalUpdateRun;
 use App\Form\LocalAppType;
+use App\LocalUpdate\ArchiveDownloader;
 use App\LocalUpdate\ArchiveRequest;
 use App\LocalUpdate\BackgroundLauncher;
 use App\LocalUpdate\LocalUpdater;
@@ -39,7 +40,7 @@ class LocalUpdateController extends AbstractController
     private readonly bool $background;
 
     #[Route('', name: '_index', methods: ['GET'])]
-    public function index(LocalUpdateRunRepository $runs): Response
+    public function index(LocalUpdateRunRepository $runs, ArchiveDownloader $downloader): Response
     {
         $settings = $this->settings->getSettings();
 
@@ -49,6 +50,7 @@ class LocalUpdateController extends AbstractController
         } catch (\Throwable $e) {
             $checks[] = ['ok' => false, 'label' => 'Archive', 'detail' => $e->getMessage()];
         }
+        $checks[] = ['ok' => true, 'label' => 'Proxy', 'detail' => $downloader->describeProxy()];
         try {
             $target = $this->updater->getTargetDirectory();
             $checks[] = ['ok' => is_writable($target), 'label' => 'Répertoire de Jira Tools', 'detail' => $target.(is_writable($target) ? '' : ' — non modifiable : droits insuffisants')];

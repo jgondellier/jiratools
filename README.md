@@ -140,6 +140,11 @@ L'écran affiche les **vérifications** (URL du zip et authentification, dossier
 
 Le téléchargement utilise les réglages réseau `APP_HTTP_PROXY`, `APP_HTTP_CAFILE` (ajouté aux autorités publiques, PEM ou DER) et `APP_HTTP_VERIFY_PEER`.
 
+**Erreur de tunnel / proxy** : le message indique le serveur refusé et le proxy utilisé (ligne *Proxy* des vérifications).
+- *réponse 403* : le proxy bloque ce serveur. Avec GitHub, le zip est servi par **`codeload.github.com`** (après une redirection de `api.github.com`) : les deux doivent être autorisés par le proxy. À défaut, utilisez un dépôt interne (GitLab de l'entreprise) ou une « URL du zip ».
+- *réponse 407* : le proxy demande une authentification : `APP_HTTP_PROXY=http://identifiant:mot-de-passe@proxy:8080` (caractères spéciaux encodés, `@` → `%40`).
+- l'adresse du proxy commence en général par `http://`, même pour aller sur des sites en `https://`.
+
 ```bat
 php bin/console app:local-update                        &rem mise à jour complète
 php bin/console app:local-update --ref=develop --dry-run
