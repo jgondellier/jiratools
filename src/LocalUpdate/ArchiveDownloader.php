@@ -10,28 +10,64 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 /**
  * Télécharge l'archive zip dans un fichier.
  *
- * Connexion : mêmes réglages que Jira / Confluence — proxy APP_HTTP_PROXY (sinon variables
- * HTTPS_PROXY / HTTP_PROXY), autorités publiques (liste Mozilla) + APP_HTTP_CAFILE (racine de
- * l'entreprise, PEM ou DER), vérification du certificat APP_HTTP_VERIFY_PEER.
+ * Connexion : réglages propres à la mise à jour, sinon ceux de Jira / Confluence / GitLab :
+ *  - proxy : APP_UPDATE_PROXY (« aucun » = connexion directe), sinon APP_HTTP_PROXY, sinon HTTPS_PROXY / HTTP_PROXY ;
+ *  - certificat de l'entreprise (PEM ou DER), ajouté aux autorités publiques (liste Mozilla) :
+ *    APP_UPDATE_CAFILE, sinon APP_HTTP_CAFILE ;
+ *  - vérification du certificat : APP_UPDATE_VERIFY_SSL, sinon APP_HTTP_VERIFY_PEER.
  */
 class ArchiveDownloader
 {
+    /** Valeurs de APP_UPDATE_PROXY qui imposent une connexion directe (sans proxy) */
+    private const NO_PROXY_VALUES = ['aucun', 'none', 'direct', '0', '-'];
+
+    private readonly ?string $proxy;
+    private readonly string $proxySource;
+    private readonly bool $direct;
+    private readonly ?string $caFile;
+    private readonly string $caSource;
+    private readonly bool $verifySsl;
+    private readonly string $verifySource;
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         #[Autowire('%env(default::APP_HTTP_PROXY)%')]
-        private readonly ?string $proxy = null,
+        ?string $proxy = null,
         #[Autowire('%env(default::APP_HTTP_CAFILE)%')]
-        private readonly ?string $caFile = null,
+        ?string $caFile = null,
         #[Autowire('%env(default::APP_HTTP_VERIFY_PEER)%')]
         string|bool|null $verifySsl = true,
         #[Autowire('%kernel.project_dir%/var/certs')]
         private readonly string $certDirectory = '',
+        #[Autowire('%env(default::APP_UPDATE_PROXY)%')]
+        ?string $updateProxy = null,
+        #[Autowire('%env(default::APP_UPDATE_CAFILE)%')]
+        ?string $updateCaFile = null,
+        #[Autowire('%env(default::APP_UPDATE_VERIFY_SSL)%')]
+        string|bool|null $updateVerifySsl = null,
     ) {
-        // Variable absente ou vide : vérification active
-        $this->verifySsl = null === $verifySsl || '' === $verifySsl || filter_var($verifySsl, FILTER_VALIDATE_BOOL);
-    }
+        // Réglage propre à la mise à jour s'il est renseigné, sinon réglage commun APP_HTTP_*
+        $updateProxy = trim((string) $updateProxy);
+        $this->direct = \in_array(mb_strtolower($updateProxy), self::NO_PROXY_VALUES, true);
+        if ('' !== $updateProxy) {
+            [$this->proxy, $this->proxySource] = [$this->direct ? null : $updateProxy, 'APP_UPDATE_PROXY'];
+        } else {
+            [$this->proxy, $this->proxySource] = [trim((string) $proxy) ?: null, 'APP_HTTP_PROXY'];
+        }
 
-    private readonly bool $verifySsl;
+        $updateCaFile = trim((string) $updateCaFile);
+        [$this->caFile, $this->caSource] = '' !== $updateCaFile
+            ? [$updateCaFile, 'APP_UPDATE_CAFILE']
+            : [trim((string) $caFile) ?: null, 'APP_HTTP_CAFILE'];
+
+        // Variable absente ou vide : vérification active
+        $updateVerifySsl = \is_string($updateVerifySsl) ? trim($updateVerifySsl) : $updateVerifySsl;
+        if (null !== $updateVerifySsl && '' !== $updateVerifySsl) {
+            [$this->verifySsl, $this->verifySource] = [filter_var($updateVerifySsl, FILTER_VALIDATE_BOOL), 'APP_UPDATE_VERIFY_SSL'];
+        } else {
+            [$this->verifySsl, $this->verifySource] = [null === $verifySsl || '' === $verifySsl || filter_var($verifySsl, FILTER_VALIDATE_BOOL), 'APP_HTTP_VERIFY_PEER'];
+        }
+    }
 
     /** Redirections suivies au plus (GitHub : api.github.com → codeload.github.com) */
     private const MAX_REDIRECTS = 10;
@@ -120,16 +156,20 @@ class ArchiveDownloader
 
         if (preg_match('/(?:CONNECT tunnel failed, response|HTTP code) (\d{3})/i', $message, $m)) {
             $hint = match ((int) $m[1]) {
-                407 => sprintf(' — le proxy %s demande une authentification : indiquez l\'identifiant et le mot de passe dans APP_HTTP_PROXY, ex. http://identifiant:mot-de-passe@proxy:8080 (caractères spéciaux encodés : @ → %%40).', $proxy),
+                407 => sprintf(' — le proxy %s demande une authentification : indiquez l\'identifiant et le mot de passe dans APP_UPDATE_PROXY (ou APP_HTTP_PROXY), ex. http://identifiant:mot-de-passe@proxy:8080 (caractères spéciaux encodés : @ → %%40).', $proxy),
                 403 => sprintf(' — le proxy %s refuse l\'accès à %s : demandez son ouverture au support informatique%s, ou téléchargez depuis un dépôt interne (GitLab de l\'entreprise, ou « URL du zip » dans les paramètres).', $proxy, $host, 'codeload.github.com' === $host ? ' (GitHub fournit les zip depuis codeload.github.com, en plus de api.github.com)' : ''),
                 default => sprintf(' — le proxy %s a refusé la connexion à %s (réponse %s).', $proxy, $host, $m[1]),
             };
         } elseif (preg_match('/tunnel|CONNECT|proxy/i', $message)) {
-            $hint = sprintf(' — échec de la connexion par le proxy %s : vérifiez APP_HTTP_PROXY (l\'adresse commence en général par http://, même pour les sites en https://).', $proxy);
+            $hint = sprintf(' — échec de la connexion par le proxy %s : vérifiez %s (l\'adresse commence en général par http://, même pour les sites en https://).', $proxy, $this->proxySource);
         } elseif (str_contains($message, 'SSL certificate') || str_contains($message, 'certificate')) {
-            $hint = ' — certificat non reconnu : indiquez le certificat racine de l\'entreprise dans APP_HTTP_CAFILE.';
+            $hint = null !== $this->caFile
+                ? sprintf(' — certificat non reconnu avec %s (%s) : essayez l\'autre certificat de l\'entreprise dans APP_UPDATE_CAFILE (utilisé seulement pour la mise à jour).', $this->caSource, $this->caFile)
+                : ' — certificat non reconnu : indiquez le certificat racine de l\'entreprise dans APP_UPDATE_CAFILE (mise à jour seulement) ou APP_HTTP_CAFILE.';
         } elseif (str_contains($message, 'resolve host')) {
-            $hint = ' — réseau d\'entreprise : renseignez APP_HTTP_PROXY.';
+            $hint = $this->direct
+                ? ' — APP_UPDATE_PROXY impose une connexion directe : indiquez le proxy de l\'entreprise.'
+                : ' — réseau d\'entreprise : renseignez APP_UPDATE_PROXY (mise à jour seulement) ou APP_HTTP_PROXY.';
         } else {
             $hint = '';
         }
@@ -140,8 +180,11 @@ class ArchiveDownloader
     /** Proxy utilisé, sans identifiant ni mot de passe */
     public function describeProxy(): string
     {
+        if ($this->direct) {
+            return 'aucun : connexion directe (APP_UPDATE_PROXY)';
+        }
         $proxy = trim((string) $this->proxy);
-        $source = 'APP_HTTP_PROXY';
+        $source = $this->proxySource;
         if ('' === $proxy) {
             foreach (['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'] as $name) {
                 $value = getenv($name);
@@ -156,6 +199,25 @@ class ArchiveDownloader
         }
 
         return sprintf('%s (%s)', preg_replace('#//[^/@]*@#', '//', $proxy), $source);
+    }
+
+    /** Certificats et vérification utilisés pour le téléchargement */
+    public function describeCertificates(): string
+    {
+        if (!$this->verifySsl) {
+            return sprintf('certificat du serveur NON vérifié (%s)', $this->verifySource);
+        }
+        if (null === $this->caFile) {
+            return 'autorités publiques (liste Mozilla)';
+        }
+
+        return sprintf('autorités publiques + %s (%s)%s', $this->caFile, $this->caSource, is_file($this->caFile) ? '' : ' — fichier introuvable !');
+    }
+
+    /** Le certificat paramétré existe-t-il (ou aucun n'est paramétré) ? */
+    public function isCertificateReadable(): bool
+    {
+        return null === $this->caFile || !$this->verifySsl || is_file($this->caFile);
     }
 
     private static function host(string $url): string
@@ -179,8 +241,11 @@ class ArchiveDownloader
     public function connectionOptions(): array
     {
         $options = ['verify_peer' => $this->verifySsl, 'verify_host' => $this->verifySsl];
-        if ('' !== trim((string) $this->proxy)) {
-            $options['proxy'] = trim($this->proxy);
+        if ($this->direct) {
+            // Ignore aussi le proxy commun APP_HTTP_PROXY appliqué par défaut au client HTTP
+            $options['no_proxy'] = '*';
+        } elseif (null !== $this->proxy) {
+            $options['proxy'] = $this->proxy;
         }
         if ($this->verifySsl) {
             $options['cafile'] = $this->caBundle();
@@ -198,7 +263,7 @@ class ArchiveDownloader
             return $public;
         }
         if (!is_file($extra)) {
-            throw new LocalUpdateException(sprintf('APP_HTTP_CAFILE : fichier introuvable (%s)', $extra));
+            throw new LocalUpdateException(sprintf('%s : fichier introuvable (%s)', $this->caSource, $extra));
         }
         $content = (string) file_get_contents($extra);
         if (!str_contains($content, '-----BEGIN CERTIFICATE-----')) {

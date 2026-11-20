@@ -51,6 +51,7 @@ class LocalUpdateController extends AbstractController
             $checks[] = ['ok' => false, 'label' => 'Archive', 'detail' => $e->getMessage()];
         }
         $checks[] = ['ok' => true, 'label' => 'Proxy', 'detail' => $downloader->describeProxy()];
+        $checks[] = ['ok' => $downloader->isCertificateReadable(), 'label' => 'Certificats', 'detail' => $downloader->describeCertificates()];
         try {
             $target = $this->updater->getTargetDirectory();
             $checks[] = ['ok' => is_writable($target), 'label' => 'Répertoire de Jira Tools', 'detail' => $target.(is_writable($target) ? '' : ' — non modifiable : droits insuffisants')];

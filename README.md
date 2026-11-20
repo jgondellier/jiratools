@@ -142,7 +142,25 @@ Création sur GitHub : *Settings → Developer settings → Personal access toke
 
 L'écran affiche les **vérifications** (URL du zip et authentification, dossier modifiable, PHP et Composer utilisés), permet une **simulation** (liste des fichiers qui changeraient, sans rien écrire ni lancer) et garde l'historique. La mise à jour tourne dans un **processus PHP séparé** et le **journal s'affiche en direct** ; l'écran peut être indisponible quelques secondes pendant `composer install` / `cache:clear`.
 
-Le téléchargement utilise les réglages réseau `APP_HTTP_PROXY`, `APP_HTTP_CAFILE` (ajouté aux autorités publiques, PEM ou DER) et `APP_HTTP_VERIFY_PEER`.
+**Réseau du téléchargement** : réglages propres à la mise à jour s'ils sont renseignés, sinon ceux de Jira / Confluence / GitLab. Utile quand le serveur Git (GitHub sur Internet) passe par un autre proxy ou un autre certificat d'entreprise que les serveurs internes :
+
+| Réglage | Mise à jour | À défaut |
+|---|---|---|
+| Proxy | `APP_UPDATE_PROXY` (`aucun` = connexion directe) | `APP_HTTP_PROXY`, puis `HTTPS_PROXY` / `HTTP_PROXY` |
+| Certificat racine (PEM ou DER, ajouté aux autorités publiques) | `APP_UPDATE_CAFILE` | `APP_HTTP_CAFILE` |
+| Vérification du certificat | `APP_UPDATE_VERIFY_SSL` | `APP_HTTP_VERIFY_PEER` |
+
+Exemple avec deux certificats d'entreprise :
+
+```ini
+# Jira, Confluence, GitLab interne
+APP_HTTP_CAFILE=C:/EasyPHP/certs/ca-interne.pem
+# Téléchargement des mises à jour (GitHub)
+APP_UPDATE_CAFILE=C:/EasyPHP/certs/ca-proxy-internet.pem
+APP_UPDATE_PROXY=http://proxy-internet.entreprise.fr:8080
+```
+
+Les lignes *Proxy* et *Certificats* des vérifications de l'écran indiquent les valeurs utilisées et leur provenance.
 
 **Erreur de tunnel / proxy** : le message indique le serveur refusé et le proxy utilisé (ligne *Proxy* des vérifications).
 - *réponse 403* : le proxy bloque ce serveur. Avec GitHub, le zip est servi par **`codeload.github.com`** (après une redirection de `api.github.com`) : les deux doivent être autorisés par le proxy. À défaut, utilisez un dépôt interne (GitLab de l'entreprise) ou une « URL du zip ».
@@ -162,6 +180,9 @@ php bin/console app:local-update --no-deploy            &rem commandes seules
 | `APP_UPDATE_BACKGROUND` | `1` | `0` : la mise à jour s'exécute dans la requête (la page attend la fin) |
 | `APP_UPDATE_COMMAND_TIMEOUT` | `1800` | Durée maximale d'une commande (s, 0 = illimitée) |
 | `APP_UPDATE_BACKUPS_KEPT` | `5` | Sauvegardes conservées |
+| `APP_UPDATE_PROXY` | *(vide)* | Proxy du téléchargement de la mise à jour ; `aucun` = connexion directe ; vide = `APP_HTTP_PROXY` |
+| `APP_UPDATE_CAFILE` | *(vide)* | Certificat racine pour le serveur Git de la mise à jour ; vide = `APP_HTTP_CAFILE` |
+| `APP_UPDATE_VERIFY_SSL` | *(vide)* | `1` / `0` : vérification du certificat du serveur Git ; vide = `APP_HTTP_VERIFY_PEER` |
 | `APP_UPDATE_ALLOW_REMOTE` | `0` | `1` rend l'écran accessible depuis un autre poste (déconseillé : il lance des commandes sur ce poste) |
 
 Si le journal reste « En attente » : vérifiez `APP_UPDATE_PHP_BINARY` et `var/local-updates/worker.log`, ou passez `APP_UPDATE_BACKGROUND=0`. Si Composer échoue depuis Apache faute de dossier utilisateur, ajoutez `COMPOSER_HOME=C:/Users/<vous>/AppData/Roaming/Composer` dans les variables d'environnement des paramètres.
