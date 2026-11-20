@@ -3,11 +3,11 @@
 {% block title %}Paramétrage du contenu des MEP{% endblock %}
 
 {% block body %}
-    <h1 class="h3 mb-3"><i class="bi bi-git"></i> Paramétrage du contenu des MEP</h1>
+    <h1 class="h3 mb-3"><i class="bi bi-git" aria-hidden="true"></i> Paramétrage du contenu des MEP</h1>
 
     {% if not gitlab_configured %}
         <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle"></i> GitLab n'est pas configuré : ajoutez dans le fichier <code>.env.local</code>
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> GitLab n'est pas configuré : ajoutez dans le fichier <code>.env.local</code>
             <pre class="mb-0 mt-2">GITLAB_BASE_URL=https://gitlab.mon-entreprise.fr
 GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
             <div class="small mt-2">Jeton : GitLab → <em>Préférences → Jetons d'accès</em>, portée <strong>read_api</strong> (lecture seule). Testez ensuite dans <a href="{{ path('admin_connection') }}">Tester la connexion</a>.</div>
@@ -63,23 +63,23 @@ GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
                         <input type="number" min="1" max="50" class="form-control" name="tagCount" id="tagCount" value="{{ settings.tagCount }}" style="max-width: 120px">
                         <div class="form-text">Les N tags les plus récents du dépôt de chaque projet : un ticket est cherché dans ces tags et dans la branche livrée.</div>
                     </div>
-                    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
+                    <button class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer et tester la lecture</button>
                     {% if settings.configured and gitlab_configured %}<a href="{{ path('release_content') }}" class="btn btn-outline-secondary">Voir le contenu de la MEP</a>{% endif %}
                 </div>
             </form>
         </div>
         <div class="col-lg-7">
             <div class="card mb-3">
-                <div class="card-header"><i class="bi bi-git"></i> Lecture des dépôts{% if gitlab_url %} <span class="text-muted small">({{ gitlab_url }})</span>{% endif %}</div>
+                <div class="card-header"><i class="bi bi-git" aria-hidden="true"></i> Lecture des dépôts{% if gitlab_url %} <span class="text-muted small">({{ gitlab_url }})</span>{% endif %}</div>
                 <div class="card-body small">
                     {% for scan in scans %}
                         <div class="mb-3">
                             <strong>{% if scan.webUrl %}<a href="{{ scan.webUrl }}" target="_blank" rel="noopener">{{ scan.label }}</a>{% else %}{{ scan.path }}{% endif %}</strong>
                             {% if scan.error %}
-                                <div class="text-danger"><i class="bi bi-x-circle"></i> {{ scan.error }}</div>
+                                <div class="text-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> {{ scan.error }}</div>
                             {% else %}
                                 <div class="text-success">
-                                    <i class="bi bi-check-circle"></i>
+                                    <i class="bi bi-check-circle" aria-hidden="true"></i>
                                     {{ scan.commitCount }} commit(s) dans <code>{{ scan.branch }}</code> absents de <code>{{ scan.reference }}</code>,
                                     {{ scan.mergeRequests|length }} merge request(s), {{ scan.directCommits|length }} commit(s) hors merge request,
                                     {{ scan.keys|length }} ticket(s) cité(s){% if scan.keys %} : {{ scan.keys|slice(0, 15)|join(', ') }}{% if scan.keys|length > 15 %}…{% endif %}{% endif %}.
@@ -93,7 +93,7 @@ GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
                 </div>
             </div>
             <div class="card">
-                <div class="card-header"><i class="bi bi-info-circle"></i> Fonctionnement</div>
+                <div class="card-header"><i class="bi bi-info-circle" aria-hidden="true"></i> Fonctionnement</div>
                 <div class="card-body small">
                     <ul class="mb-0">
                         <li>Le contenu de la MEP = les commits de la <strong>branche livrée</strong> absents de la <strong>production</strong> (équivalent de <code>git log production..develop</code>).</li>

@@ -3,9 +3,9 @@
 {% block title %}Code · {{ project.name }}{% endblock %}
 
 {% macro level_icon(level) %}
-    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>
-    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
-    {%- else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif -%}
+    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger" aria-hidden="true"></i>
+    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i>
+    {%- else %}<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i>{% endif -%}
 {% endmacro %}
 
 {% block body %}
@@ -29,7 +29,7 @@
     {% endembed %}
 
     {% if report.error %}
-        <div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ report.error }}</div>
+        <div class="alert alert-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> {{ report.error }}</div>
     {% else %}
         <p class="text-muted small">
             Dépôt <a href="{{ report.repositoryUrl }}" target="_blank" rel="noopener">{{ report.repositoryName }}</a> :
@@ -39,21 +39,21 @@
 
         <div class="row g-3 mb-3">
             <div class="col-6 col-md"><div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-ticket-detailed"></i> Tickets</div><div class="display-6">{{ report.tickets|length }}</div>
+                <div class="small"><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets</div><div class="display-6">{{ report.tickets|length }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-x-octagon"></i> Version ou tag incohérent</div><div class="display-6">{{ counts.error }}</div>
+                <div class="small"><i class="bi bi-x-octagon" aria-hidden="true"></i> Version ou tag incohérent</div><div class="display-6">{{ counts.error }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
+                <div class="small"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ report.countUntracked ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-patch-question"></i> MR / commits sans ticket</div><div class="display-6">{{ report.countUntracked }}</div>
+                <div class="small"><i class="bi bi-patch-question" aria-hidden="true"></i> MR / commits sans ticket</div><div class="display-6">{{ report.countUntracked }}</div>
             </div></div></div>
         </div>
 
         <div class="card mb-3">
-            <div class="card-header"><i class="bi bi-tags"></i> Branche livrée et tags de version</div>
+            <div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> Branche livrée et tags de version</div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle small">
                     <thead class="table-light"><tr><th>Branche / tag</th><th>Date</th><th>Version Jira</th><th>Commits</th><th>Tickets</th><th>Sans ticket</th><th>Contrôle</th><th></th></tr></thead>
@@ -64,8 +64,8 @@
                         {% set untracked = scan.mergeRequests|filter(m => m.keys is empty)|length + scan.directCommits|filter(c => c.keys is empty)|length %}
                         <tr>
                             <td>
-                                {% if row.develop ?? false %}<i class="bi bi-git"></i> <strong>{{ row.name }}</strong> <span class="text-muted">depuis {{ row.previous ?: 'le début' }}</span>
-                                {% else %}<i class="bi bi-tag"></i> <a href="{{ row.url }}" target="_blank" rel="noopener" class="fw-semibold">{{ row.name }}</a>{% endif %}
+                                {% if row.develop ?? false %}<i class="bi bi-git" aria-hidden="true"></i> <strong>{{ row.name }}</strong> <span class="text-muted">depuis {{ row.previous ?: 'le début' }}</span>
+                                {% else %}<i class="bi bi-tag" aria-hidden="true"></i> <a href="{{ row.url }}" target="_blank" rel="noopener" class="fw-semibold">{{ row.name }}</a>{% endif %}
                             </td>
                             <td class="text-nowrap">{{ row.date ? row.date|date('d/m/Y') : '' }}</td>
                             <td>
@@ -81,7 +81,7 @@
                                 {% for problem in row.problems %}<div>{{ _self.level_icon(problem.level) }} {{ problem.message }}</div>{% endfor %}
                             </td>
                             <td class="text-end">
-                                {% if not (row.develop ?? false) %}<a href="{{ path('code_tag', {project: project.id, tag: row.name}) }}" class="btn btn-sm btn-outline-secondary text-nowrap">Contenu du tag</a>
+                                {% if not (row.develop ?? false) %}<a href="{{ path('code_tag', {project: project.id, tag: row.name}) }}" class="btn btn-sm btn-outline-secondary text-nowrap">Voir le contenu</a>
                                 {% elseif scan.compareUrl %}<a href="{{ scan.compareUrl }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Comparer</a>{% endif %}
                             </td>
                         </tr>
@@ -92,7 +92,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header"><i class="bi bi-ticket-detailed"></i> Tickets ({{ tickets|length }})</div>
+            <div class="card-header"><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets ({{ tickets|length }})</div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle delivery-table">
                     <thead class="table-light"><tr><th>Ticket</th><th>Statut</th><th>Version Jira</th><th>Code</th><th>Contrôle</th></tr></thead>
@@ -113,14 +113,14 @@
                                 {% for v in ticket.versions %}<span class="badge {{ v.released ? 'text-bg-light border' : 'text-bg-info' }}">{{ v.name }}</span> {% else %}<span class="text-muted">—</span>{% endfor %}
                             </td>
                             <td class="small">
-                                {% for tag in ticket.tags %}<a href="{{ path('code_tag', {project: project.id, tag: tag}) }}" class="badge text-bg-success text-decoration-none"><i class="bi bi-tag"></i> {{ tag }}</a> {% endfor %}
-                                {% if ticket.inDevelop %}<span class="badge text-bg-primary"><i class="bi bi-git"></i> {{ report.branch }}</span>{% endif %}
+                                {% for tag in ticket.tags %}<a href="{{ path('code_tag', {project: project.id, tag: tag}) }}" class="badge text-bg-success text-decoration-none"><i class="bi bi-tag" aria-hidden="true"></i> {{ tag }}</a> {% endfor %}
+                                {% if ticket.inDevelop %}<span class="badge text-bg-primary"><i class="bi bi-git" aria-hidden="true"></i> {{ report.branch }}</span>{% endif %}
                                 {% if not ticket.inCode %}<span class="text-muted">Aucun commit</span>{% endif %}
                                 {% if ticket.sources %}
                                     <details class="mt-1"><summary class="text-muted">{{ ticket.sources|length }} MR / commit(s)</summary>
                                         {% for source in ticket.sources %}
                                             <div class="text-truncate" style="max-width: 360px" title="{{ source.repository }} · {{ source.author }}">
-                                                <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                                                <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}" aria-hidden="true"></i>
                                                 <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.label }}</a>
                                             </div>
                                         {% endfor %}

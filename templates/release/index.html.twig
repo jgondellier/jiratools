@@ -5,12 +5,12 @@
 
 {% block body %}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0"><i class="bi bi-git"></i> Contenu de la MEP</h1>
+        <h1 class="h3 mb-0"><i class="bi bi-git" aria-hidden="true"></i> Contenu de la MEP</h1>
         <form class="d-flex flex-wrap gap-2 align-items-center" method="get" id="release-form">
             <input type="hidden" name="v" value="1">
             <div class="dropdown">
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                    <i class="bi bi-box-seam"></i>
+                    <i class="bi bi-box-seam" aria-hidden="true"></i>
                     {% if content.targetVersions %}Version : {{ content.targetVersions|join(', ') }}{% else %}Aucune version choisie{% endif %}
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 280px; max-height: 420px; overflow: auto">
@@ -32,8 +32,8 @@
                 <input class="form-check-input" type="checkbox" name="problems" value="1" id="problems" {{ only_problems ? 'checked' }} onchange="this.form.submit()">
                 <label class="form-check-label small" for="problems">Problèmes uniquement</label>
             </div>
-            <button class="btn btn-sm btn-primary" name="refresh" value="1" title="Relire GitLab et Jira"><i class="bi bi-arrow-clockwise"></i></button>
-            <a href="{{ path('admin_release_content') }}" class="btn btn-sm btn-outline-secondary" title="Paramétrage"><i class="bi bi-gear"></i></a>
+            <button class="btn btn-sm btn-primary" name="refresh" value="1" title="Relire GitLab et Jira"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
+            <a href="{{ path('admin_release_content') }}" class="btn btn-sm btn-outline-secondary" title="Paramétrage"><i class="bi bi-gear" aria-hidden="true"></i></a>
         </form>
     </div>
 
@@ -44,43 +44,43 @@
     </p>
 
     {% for scan in content.repositoryErrors %}
-        <div class="alert alert-danger py-2"><i class="bi bi-x-circle"></i> <strong>{{ scan.label }}</strong> : {{ scan.error }}</div>
+        <div class="alert alert-danger py-2"><i class="bi bi-x-circle" aria-hidden="true"></i> <strong>{{ scan.label }}</strong> : {{ scan.error }}</div>
     {% endfor %}
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md">
             <div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-ticket-detailed"></i> Tickets dans le code</div><div class="display-6">{{ content.tickets|length }}</div>
+                <div class="small"><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets dans le code</div><div class="display-6">{{ content.tickets|length }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
             <div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-x-octagon"></i> Jira à corriger</div><div class="display-6">{{ counts.error }}</div>
+                <div class="small"><i class="bi bi-x-octagon" aria-hidden="true"></i> Jira à corriger</div><div class="display-6">{{ counts.error }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
             <div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
+                <div class="small"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
             <div class="card stat-card h-100 {{ content.missing ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-question-octagon"></i> Dans la version, sans code</div><div class="display-6">{{ content.targetVersions ? content.missing|length : '–' }}</div>
+                <div class="small"><i class="bi bi-question-octagon" aria-hidden="true"></i> Dans la version, sans code</div><div class="display-6">{{ content.targetVersions ? content.missing|length : '–' }}</div>
             </div></div>
         </div>
         <div class="col-6 col-md">
             <div class="card stat-card h-100 {{ content.untracked ? 'border-warning' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-patch-question"></i> MR / commits sans ticket</div><div class="display-6">{{ content.untracked|length }}</div>
+                <div class="small"><i class="bi bi-patch-question" aria-hidden="true"></i> MR / commits sans ticket</div><div class="display-6">{{ content.untracked|length }}</div>
             </div></div>
         </div>
     </div>
 
     <div class="card mb-3">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span><i class="bi bi-ticket-detailed"></i> Tickets livrés par cette MEP</span>
+            <span><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets livrés par cette MEP</span>
             <span class="d-flex gap-2">
-                {% if fix_url %}<a href="{{ fix_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger"><i class="bi bi-pencil-square"></i> Ouvrir les tickets à corriger dans Jira</a>{% endif %}
-                {% if all_url %}<a href="{{ all_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Tous dans Jira</a>{% endif %}
+                {% if fix_url %}<a href="{{ fix_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger"><i class="bi bi-pencil-square" aria-hidden="true"></i> Ouvrir les tickets à corriger dans Jira</a>{% endif %}
+                {% if all_url %}<a href="{{ all_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Tous dans Jira</a>{% endif %}
             </span>
         </div>
         {{ include('release/_tickets_table.html.twig') }}
@@ -90,8 +90,8 @@
     {% if content.targetVersions %}
         <div class="card mb-3 {{ content.missing ? 'border-danger' }}">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <span><i class="bi bi-question-octagon"></i> Dans la version {{ content.targetVersions|join(', ') }} mais sans merge request ni commit ({{ content.missing|length }})</span>
-                {% if version_url %}<a href="{{ version_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Version dans Jira</a>{% endif %}
+                <span><i class="bi bi-question-octagon" aria-hidden="true"></i> Dans la version {{ content.targetVersions|join(', ') }} mais sans merge request ni commit ({{ content.missing|length }})</span>
+                {% if version_url %}<a href="{{ version_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Version dans Jira</a>{% endif %}
             </div>
             {% if content.missing %}
                 <div class="card-body small pb-1">
@@ -109,18 +109,18 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <div class="card-body small text-success"><i class="bi bi-check-circle"></i> Tous les tickets de la version sont dans le code.</div>
+                <div class="card-body small text-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Tous les tickets de la version sont dans le code.</div>
             {% endif %}
         </div>
     {% endif %}
 
     <div class="card mb-3">
-        <div class="card-header"><i class="bi bi-patch-question"></i> Merge requests et commits sans ticket ({{ content.untracked|length }})</div>
+        <div class="card-header"><i class="bi bi-patch-question" aria-hidden="true"></i> Merge requests et commits sans ticket ({{ content.untracked|length }})</div>
         {% if content.untracked %}
             <ul class="list-group list-group-flush">
                 {% for item in content.untracked %}
                     <li class="list-group-item small">
-                        <i class="bi bi-{{ item.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                        <i class="bi bi-{{ item.type == 'mr' ? 'sign-merge-left' : 'git' }}" aria-hidden="true"></i>
                         <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.label }}</a>
                         {% if item.detail %}<code class="ms-1">{{ item.detail }}</code>{% endif %}
                         <span class="text-muted">· {{ item.author }}{{ item.date ? ' · ' ~ item.date|date('d/m/Y') }}{% if content.repositories|length > 1 %} · {{ item.repository }}{% endif %}</span>
@@ -128,12 +128,12 @@
                 {% endfor %}
             </ul>
         {% else %}
-            <div class="card-body small text-success"><i class="bi bi-check-circle"></i> Tout le code est rattaché à un ticket.</div>
+            <div class="card-body small text-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Tout le code est rattaché à un ticket.</div>
         {% endif %}
     </div>
 
     <div class="card">
-        <div class="card-header"><i class="bi bi-git"></i> Dépôts lus</div>
+        <div class="card-header"><i class="bi bi-git" aria-hidden="true"></i> Dépôts lus</div>
         <ul class="list-group list-group-flush">
             {% for scan in content.repositories %}
                 <li class="list-group-item small">

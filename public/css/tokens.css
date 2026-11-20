@@ -1,0 +1,79 @@
+/* Cardif Digital Platform v2.2 — tokens (couleurs, espacements, rayons, ombres)
+   Repris du design system « Cardif Digital Platform » : aucune autre valeur n'est utilisée dans app.css. */
+:root {
+    --neutral-0: #ffffff;
+    --neutral-100: #e6e6e6;
+    --neutral-200: #cccccc;
+    --neutral-300: #b3b3b3;
+    --neutral-400: #999999;
+    --neutral-500: #808080;
+    --neutral-600: #666666;
+    --neutral-700: #4d4d4d;
+    --neutral-800: #333333;
+    --neutral-900: #1a1a1a;
+
+    --green-0: #e7f2ed;
+    --green-100: #cfe5dc;
+    --green-200: #aad1c2;
+    --green-500: #3d9773;
+    --green-700: #0d7d50;
+    --green-800: #005231;
+    --green-900: #052e1e;
+
+    --blue-0: #e7f3fd;
+    --blue-100: #d0e7fb;
+    --blue-600: #106ebc;
+    --blue-700: #0c528d;
+    --blue-800: #08375e;
+
+    --orange-0: #fff8f1;
+    --orange-100: #f8eee5;
+    --orange-200: #ffe5cc;
+    --orange-600: #ff7c00;
+    --orange-700: #cc6300;
+    --orange-800: #994a00;
+    --orange-900: #503116;
+
+    --red-0: #ffe5e5;
+    --red-100: #ffcccc;
+    --red-600: #c40000;
+    --red-700: #990000;
+
+    --yellow-300: #fceb9c;
+    --purple-100: #e8e7f8;
+    --purple-200: #d9d8f3;
+
+    --shadow-100: rgba(26, 26, 26, 0.11);
+    --shadow-200: rgba(26, 26, 26, 0.15);
+    --shadow-300: rgba(26, 26, 26, 0.3);
+
+    /* Rôles */
+    --color-text: var(--neutral-900);
+    --color-text-muted: var(--neutral-600);
+    --color-primary: var(--green-700);
+    --color-primary-hover: var(--green-800);
+    --color-success: var(--green-700);
+    --color-info: var(--blue-600);
+    --color-warning: var(--orange-600);
+    --color-error: var(--red-600);
+    --color-border: var(--neutral-700);
+    --color-divider: var(--neutral-200);
+
+    /* Espacements ($spacer = 20px) */
+    --space-1: 5px;
+    --space-2: 10px;
+    --space-3: 20px;
+    --space-4: 30px;
+    --space-5: 50px;
+
+    /* Rayons */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-pill: 999px;
+
+    /* Élévations */
+    --elevation-btn: 0 2px 4px var(--shadow-200);
+    --elevation-card: 0 2px 8px var(--shadow-100);
+
+    --ds-font: "Open Sans", Arial, sans-serif;
+}

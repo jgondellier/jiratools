@@ -33,10 +33,11 @@ abstract class AbstractCrudController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $this->em->persist($entity);
             $this->em->flush();
-            $this->addFlash('success', sprintf('%s enregistré(e).', ucfirst($this->labels()[0])));
+            $this->addFlash('success', sprintf('%s enregistré(e).', $this->capitalizedLabel()));
 
             $redirect = $request->query->get('redirect');
-            if (\is_string($redirect) && str_starts_with($redirect, '/') && !str_starts_with($redirect, '//')) {
+            // Chemin local uniquement : « //site » et « /\site » mènent à un autre site dans les navigateurs
+            if (\is_string($redirect) && 1 === preg_match('#^/(?![/\\\\])[^\\\\\s]*$#', $redirect)) {
                 return $this->redirect($redirect);
             }
 
@@ -56,9 +57,17 @@ abstract class AbstractCrudController extends AbstractController
         if ($this->isCsrfTokenValid('delete'.$entity->getId(), (string) $request->request->get('_token'))) {
             $this->em->remove($entity);
             $this->em->flush();
-            $this->addFlash('success', sprintf('%s supprimé(e).', ucfirst($this->labels()[0])));
+            $this->addFlash('success', sprintf('%s supprimé(e).', $this->capitalizedLabel()));
         }
 
         return $this->redirectToRoute($this->routePrefix().'_index');
+    }
+
+    /** « équipe » → « Équipe » (ucfirst ne gère pas les lettres accentuées) */
+    private function capitalizedLabel(): string
+    {
+        $label = $this->labels()[0];
+
+        return mb_strtoupper(mb_substr($label, 0, 1)).mb_substr($label, 1);
     }
 }

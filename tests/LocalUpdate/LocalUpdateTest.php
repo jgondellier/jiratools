@@ -93,6 +93,16 @@ final class LocalUpdateTest extends WebTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
+    public function testForeignHostNameIsRefused(): void
+    {
+        // « DNS rebinding » : un domaine externe qui pointe vers 127.0.0.1
+        $this->client->request('GET', '/mises-a-jour', server: ['HTTP_HOST' => 'attaquant.example']);
+        self::assertResponseStatusCodeSame(403);
+
+        $this->client->request('GET', '/mises-a-jour', server: ['HTTP_HOST' => '127.0.0.1:8000']);
+        self::assertResponseIsSuccessful();
+    }
+
     public function testFullUpdateOfTheInstallation(): void
     {
         $install = $this->tmp('jiratools');

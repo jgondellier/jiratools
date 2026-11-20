@@ -12,7 +12,7 @@
     {% endembed %}
 
     {% if result.error %}
-        <div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ result.error }}</div>
+        <div class="alert alert-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> {{ result.error }}</div>
     {% else %}
         {% set scan = content.repositories|first %}
         <p class="text-muted small">
@@ -24,28 +24,28 @@
             {% for name in content.targetVersions %}<span class="badge text-bg-info">{{ name }}</span> {% else %}<span class="badge text-bg-danger">aucune version du numéro {{ result.tag }}</span>{% endfor %}
         </p>
 
-        {% if scan.error %}<div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ scan.error }}</div>{% endif %}
+        {% if scan.error %}<div class="alert alert-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> {{ scan.error }}</div>{% endif %}
 
         <div class="row g-3 mb-3">
             <div class="col-6 col-md"><div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-git"></i> Commits</div><div class="display-6">{{ commits|length }}</div>
+                <div class="small"><i class="bi bi-git" aria-hidden="true"></i> Commits</div><div class="display-6">{{ commits|length }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ without_ticket ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-patch-question"></i> Commits sans ticket</div><div class="display-6">{{ without_ticket }}</div>
+                <div class="small"><i class="bi bi-patch-question" aria-hidden="true"></i> Commits sans ticket</div><div class="display-6">{{ without_ticket }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-ticket-detailed"></i> Tickets</div><div class="display-6">{{ content.tickets|length }}</div>
+                <div class="small"><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets</div><div class="display-6">{{ content.tickets|length }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-x-octagon"></i> Jira à corriger</div><div class="display-6">{{ counts.error }}</div>
+                <div class="small"><i class="bi bi-x-octagon" aria-hidden="true"></i> Jira à corriger</div><div class="display-6">{{ counts.error }}</div>
             </div></div></div>
             <div class="col-6 col-md"><div class="card stat-card h-100 {{ content.missing ? 'border-danger text-danger' }}"><div class="card-body py-2">
-                <div class="small"><i class="bi bi-question-octagon"></i> Dans la version, absents du tag</div><div class="display-6">{{ content.targetVersions ? content.missing|length : '–' }}</div>
+                <div class="small"><i class="bi bi-question-octagon" aria-hidden="true"></i> Dans la version, absents du tag</div><div class="display-6">{{ content.targetVersions ? content.missing|length : '–' }}</div>
             </div></div></div>
         </div>
 
         <div class="card mb-3">
-            <div class="card-header"><i class="bi bi-git"></i> Commits du tag ({{ commits|length }})</div>
+            <div class="card-header"><i class="bi bi-git" aria-hidden="true"></i> Commits du tag ({{ commits|length }})</div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle small delivery-table">
                     <thead class="table-light"><tr><th>Date</th><th>Commit</th><th>Merge request</th><th>Auteur</th><th>Ticket(s) Jira</th></tr></thead>
@@ -65,7 +65,7 @@
                                     <a href="{{ t and t.issue ? t.issue.url : '#' }}" target="_blank" rel="noopener" class="badge text-decoration-none {{ t and t.level == 'error' ? 'text-bg-danger' : (t and t.level == 'warning' ? 'text-bg-warning' : 'text-bg-success') }}">{{ key }}</a>
                                     {% if commit.keys is empty and commit.mr %}<span class="text-muted" title="Ticket de la merge request">(MR)</span>{% endif %}
                                 {% else %}
-                                    <span class="badge text-bg-danger"><i class="bi bi-exclamation-octagon"></i> Aucun ticket</span>
+                                    <span class="badge text-bg-danger"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> Aucun ticket</span>
                                 {% endfor %}
                             </td>
                         </tr>
@@ -78,8 +78,8 @@
         </div>
 
         <div class="card mb-3">
-            <div class="card-header"><i class="bi bi-ticket-detailed"></i> Tickets du tag et contrôle Jira
-                {% if fix_url %}<a href="{{ fix_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger float-end"><i class="bi bi-pencil-square"></i> Ouvrir les tickets à corriger dans Jira</a>{% endif %}
+            <div class="card-header"><i class="bi bi-ticket-detailed" aria-hidden="true"></i> Tickets du tag et contrôle Jira
+                {% if fix_url %}<a href="{{ fix_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger float-end"><i class="bi bi-pencil-square" aria-hidden="true"></i> Ouvrir les tickets à corriger dans Jira</a>{% endif %}
             </div>
             {{ include('release/_tickets_table.html.twig', {tickets: content.tickets, only_problems: false}) }}
         </div>
@@ -87,8 +87,8 @@
         {% if content.targetVersions %}
             <div class="card {{ content.missing ? 'border-danger' }}">
                 <div class="card-header d-flex justify-content-between align-items-center gap-2">
-                    <span><i class="bi bi-question-octagon"></i> Dans la version {{ content.targetVersions|join(', ') }} mais absents du tag ({{ content.missing|length }})</span>
-                    {% if version_url %}<a href="{{ version_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Version dans Jira</a>{% endif %}
+                    <span><i class="bi bi-question-octagon" aria-hidden="true"></i> Dans la version {{ content.targetVersions|join(', ') }} mais absents du tag ({{ content.missing|length }})</span>
+                    {% if version_url %}<a href="{{ version_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Version dans Jira</a>{% endif %}
                 </div>
                 {% if content.missing %}
                     <ul class="list-group list-group-flush">
@@ -101,7 +101,7 @@
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <div class="card-body small text-success"><i class="bi bi-check-circle"></i> Tous les tickets de la version sont dans le tag.</div>
+                    <div class="card-body small text-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Tous les tickets de la version sont dans le tag.</div>
                 {% endif %}
             </div>
         {% endif %}

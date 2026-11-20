@@ -1,8 +1,8 @@
 {# Tableau des tickets cités dans le code et de leur contrôle Jira (variables : content, tickets, only_problems) #}
 {% macro level_icon(level) %}
-    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>
-    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
-    {%- else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif -%}
+    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger" aria-hidden="true"></i>
+    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i>
+    {%- else %}<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i>{% endif -%}
 {% endmacro %}
 
         <div class="table-responsive">
@@ -32,7 +32,7 @@
                                     <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : (v.released ? 'text-bg-light border' : 'text-bg-warning') }}">{{ v.name }}</span>
                                 {% else %}
                                     {% for v in ticket.parent.versionDetails ?? [] %}
-                                        <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : 'text-bg-light border' }}" title="Version du ticket parent">{{ v.name }} <i class="bi bi-arrow-90deg-up"></i></span>
+                                        <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : 'text-bg-light border' }}" title="Version du ticket parent">{{ v.name }} <i class="bi bi-arrow-90deg-up" aria-hidden="true"></i></span>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endfor %}
@@ -49,7 +49,7 @@
                         <td class="small" style="min-width: 220px">
                             {% for source in ticket.sources %}
                                 <div class="text-truncate" style="max-width: 360px" title="{{ source.repository }} · {{ source.author }}{{ source.date ? ' · ' ~ source.date|date('d/m/Y') }}">
-                                    <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                                    <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}" aria-hidden="true"></i>
                                     <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.label }}</a>
                                     {% if content.repositories|length > 1 %}<span class="text-muted">· {{ source.repository }}</span>{% endif %}
                                 </div>

@@ -33,15 +33,21 @@ class ArchiveDownloader
 
     private readonly bool $verifySsl;
 
+    /** Redirections suivies au plus (GitHub : api.github.com → codeload.github.com) */
+    private const MAX_REDIRECTS = 10;
+
     /**
+     * Les redirections sont suivies ici, une par une, pour savoir quel serveur répond ou bloque :
+     * un proxy d'entreprise laisse souvent passer api.github.com mais refuse codeload.github.com.
+     *
      * @return int taille téléchargée (octets)
      */
     public function download(ArchiveRequest $request, string $destination): int
     {
-        $options = ['headers' => $request->headers, 'max_redirects' => 10, 'timeout' => 60] + $this->connectionOptions();
-        if (null !== $request->basicAuth) {
-            $options['auth_basic'] = $request->basicAuth;
-        }
+        $url = $request->url;
+        $headers = $request->headers;
+        $basicAuth = $request->basicAuth;
+        $hops = [];
 
         $handle = @fopen($destination, 'wb');
         if (false === $handle) {
@@ -49,10 +55,39 @@ class ArchiveDownloader
         }
 
         try {
-            $response = $this->httpClient->request('GET', $request->url, $options);
-            $status = $response->getStatusCode();
+            for ($redirects = 0; ; ++$redirects) {
+                $hops[] = self::host($url);
+                $options = ['headers' => $headers, 'max_redirects' => 0, 'timeout' => 60] + $this->connectionOptions();
+                if (null !== $basicAuth) {
+                    $options['auth_basic'] = $basicAuth;
+                }
+
+                try {
+                    $response = $this->httpClient->request('GET', $url, $options);
+                    $status = $response->getStatusCode();
+                    $location = $response->getHeaders(false)['location'][0] ?? null;
+                } catch (ExceptionInterface $e) {
+                    throw new LocalUpdateException($this->transportError($e, $hops), 0, $e);
+                }
+
+                if ($status >= 300 && $status < 400 && null !== $location) {
+                    if ($redirects >= self::MAX_REDIRECTS) {
+                        throw new LocalUpdateException(sprintf('Téléchargement impossible : trop de redirections (%s).', implode(' → ', $hops)));
+                    }
+                    $next = self::resolve($url, $location);
+                    // Le jeton n'est jamais envoyé à un autre serveur que celui du dépôt
+                    if (self::host($next) !== self::host($url)) {
+                        unset($headers['Authorization'], $headers['PRIVATE-TOKEN']);
+                        $basicAuth = null;
+                    }
+                    $url = $next;
+                    continue;
+                }
+                break;
+            }
+
             if ($status >= 400) {
-                throw new LocalUpdateException(sprintf('Téléchargement refusé (HTTP %d) : %s%s', $status, $this->errorMessage($response->getContent(false)), match ($status) {
+                throw new LocalUpdateException(sprintf('Téléchargement refusé par %s (HTTP %d) : %s%s', end($hops), $status, $this->errorMessage($response->getContent(false)), match ($status) {
                     401 => ' — jeton absent ou invalide.',
                     403 => ' — droits insuffisants sur le dépôt (ou limite d\'appels atteinte sans jeton).',
                     404 => ' — dépôt, branche ou tag introuvable (un dépôt privé sans jeton répond aussi 404).',
@@ -61,18 +96,84 @@ class ArchiveDownloader
             }
 
             $size = 0;
-            foreach ($this->httpClient->stream($response) as $chunk) {
-                $size += fwrite($handle, $chunk->getContent());
+            try {
+                foreach ($this->httpClient->stream($response) as $chunk) {
+                    $size += fwrite($handle, $chunk->getContent());
+                }
+            } catch (ExceptionInterface $e) {
+                throw new LocalUpdateException($this->transportError($e, $hops), 0, $e);
             }
-        } catch (ExceptionInterface $e) {
-            $hint = str_contains($e->getMessage(), 'SSL certificate') ? ' — certificat non reconnu : indiquez le certificat racine de l\'entreprise dans APP_HTTP_CAFILE.'
-                : (str_contains($e->getMessage(), 'resolve host') ? ' — réseau d\'entreprise : renseignez APP_HTTP_PROXY.' : '');
-            throw new LocalUpdateException(sprintf('Téléchargement impossible : %s%s', $e->getMessage(), $hint), 0, $e);
         } finally {
             fclose($handle);
         }
 
         return $size;
+    }
+
+    /** Message d'une erreur réseau : serveur en cause et piste de correction */
+    private function transportError(ExceptionInterface $e, array $hops): string
+    {
+        $message = $e->getMessage();
+        $host = end($hops);
+        $via = \count($hops) > 1 ? sprintf(' (redirigé par %s)', implode(' → ', \array_slice($hops, 0, -1))) : '';
+        $proxy = $this->describeProxy();
+
+        if (preg_match('/(?:CONNECT tunnel failed, response|HTTP code) (\d{3})/i', $message, $m)) {
+            $hint = match ((int) $m[1]) {
+                407 => sprintf(' — le proxy %s demande une authentification : indiquez l\'identifiant et le mot de passe dans APP_HTTP_PROXY, ex. http://identifiant:mot-de-passe@proxy:8080 (caractères spéciaux encodés : @ → %%40).', $proxy),
+                403 => sprintf(' — le proxy %s refuse l\'accès à %s : demandez son ouverture au support informatique%s, ou téléchargez depuis un dépôt interne (GitLab de l\'entreprise, ou « URL du zip » dans les paramètres).', $proxy, $host, 'codeload.github.com' === $host ? ' (GitHub fournit les zip depuis codeload.github.com, en plus de api.github.com)' : ''),
+                default => sprintf(' — le proxy %s a refusé la connexion à %s (réponse %s).', $proxy, $host, $m[1]),
+            };
+        } elseif (preg_match('/tunnel|CONNECT|proxy/i', $message)) {
+            $hint = sprintf(' — échec de la connexion par le proxy %s : vérifiez APP_HTTP_PROXY (l\'adresse commence en général par http://, même pour les sites en https://).', $proxy);
+        } elseif (str_contains($message, 'SSL certificate') || str_contains($message, 'certificate')) {
+            $hint = ' — certificat non reconnu : indiquez le certificat racine de l\'entreprise dans APP_HTTP_CAFILE.';
+        } elseif (str_contains($message, 'resolve host')) {
+            $hint = ' — réseau d\'entreprise : renseignez APP_HTTP_PROXY.';
+        } else {
+            $hint = '';
+        }
+
+        return sprintf('Téléchargement impossible depuis %s%s : %s%s', $host, $via, $message, $hint);
+    }
+
+    /** Proxy utilisé, sans identifiant ni mot de passe */
+    public function describeProxy(): string
+    {
+        $proxy = trim((string) $this->proxy);
+        $source = 'APP_HTTP_PROXY';
+        if ('' === $proxy) {
+            foreach (['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'] as $name) {
+                $value = getenv($name);
+                if (\is_string($value) && '' !== trim($value)) {
+                    [$proxy, $source] = [trim($value), $name];
+                    break;
+                }
+            }
+        }
+        if ('' === $proxy) {
+            return '(aucun proxy paramétré)';
+        }
+
+        return sprintf('%s (%s)', preg_replace('#//[^/@]*@#', '//', $proxy), $source);
+    }
+
+    private static function host(string $url): string
+    {
+        return strtolower((string) parse_url($url, PHP_URL_HOST));
+    }
+
+    private static function resolve(string $base, string $location): string
+    {
+        if (preg_match('#^https?://#i', $location)) {
+            return $location;
+        }
+        $origin = parse_url($base, PHP_URL_SCHEME).'://'.parse_url($base, PHP_URL_HOST).(null !== parse_url($base, PHP_URL_PORT) ? ':'.parse_url($base, PHP_URL_PORT) : '');
+        if (str_starts_with($location, '//')) {
+            return parse_url($base, PHP_URL_SCHEME).':'.$location;
+        }
+
+        return $origin.(str_starts_with($location, '/') ? '' : '/').$location;
     }
 
     public function connectionOptions(): array
