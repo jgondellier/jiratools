@@ -46,6 +46,10 @@ class Project
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $extraJql = null;
 
+    /** Dépôt GitLab du projet ("groupe/projet" ou identifiant numérique) : tickets livrés, tags de version */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $gitlabRepository = null;
+
     #[ORM\Column]
     private bool $active = true;
 
@@ -154,6 +158,20 @@ class Project
     public function setExtraJql(?string $extraJql): static
     {
         $this->extraJql = $extraJql;
+
+        return $this;
+    }
+
+    public function getGitlabRepository(): ?string
+    {
+        return $this->gitlabRepository;
+    }
+
+    /** Accepte aussi l'URL du dépôt (https://gitlab…/groupe/projet.git) */
+    public function setGitlabRepository(?string $repository): static
+    {
+        $parsed = \App\Release\ReleaseContentSettings::parseRepositories((string) $repository);
+        $this->gitlabRepository = $parsed[0]['path'] ?? null;
 
         return $this;
     }

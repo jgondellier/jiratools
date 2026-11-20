@@ -17,6 +17,7 @@ class ReleaseContentSettings
         'reference' => 'master',   // branche ou tag de production ; vide = dernier tag
         'ticketProjects' => [],    // clés de projets Jira reconnues dans les commits ; vide = mes projets + projets WS
         'expectedStatuses' => [],  // statuts attendus pour un ticket livré ; vide = catégorie "Terminé"
+        'tagCount' => 10,          // suivi par projet : nombre de tags de version lus
     ];
 
     private ?array $values = null;
@@ -35,6 +36,7 @@ class ReleaseContentSettings
         $clean = array_replace(self::DEFAULTS, array_intersect_key($values, self::DEFAULTS));
         $clean['branch'] = trim((string) $clean['branch']) ?: 'develop';
         $clean['reference'] = trim((string) $clean['reference']);
+        $clean['tagCount'] = max(1, min(50, (int) $clean['tagCount']));
         $this->settings->setValue(self::SETTING, $clean);
         $this->values = $clean;
     }
@@ -59,6 +61,12 @@ class ReleaseContentSettings
     public function getReference(): string
     {
         return (string) $this->all()['reference'];
+    }
+
+    /** Suivi par projet : nombre de tags de version lus (les plus récents) */
+    public function getTagCount(): int
+    {
+        return (int) $this->all()['tagCount'];
     }
 
     /** @return string[] */

@@ -20,10 +20,11 @@ GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
                 <div class="card-body">
                     <input type="hidden" name="_token" value="{{ csrf_token('release_content') }}">
                     <div class="mb-3">
-                        <label class="form-label" for="repositories">Dépôts GitLab</label>
+                        <label class="form-label" for="repositories">Dépôts GitLab supplémentaires</label>
                         <textarea class="form-control font-monospace" name="repositories" id="repositories" rows="4" placeholder="mon-groupe/portail-front&#10;mon-groupe/portail-api | v2.3.0">{{ repositories_text }}</textarea>
                         <div class="form-text">
-                            Un dépôt par ligne : chemin <code>groupe/projet</code> (l'URL du dépôt est acceptée) ou identifiant numérique.
+                            Le dépôt de chaque projet se renseigne dans <a href="{{ path('admin_project_index') }}">Paramétrage → Projets</a> ;
+                            ajoutez ici les dépôts sans projet. Un dépôt par ligne : chemin <code>groupe/projet</code> (l'URL du dépôt est acceptée) ou identifiant numérique.
                             Pour un dépôt qui ne suit pas les valeurs ci-dessous : <code>groupe/projet | référence | branche</code>.
                         </div>
                     </div>
@@ -56,6 +57,11 @@ GITLAB_API_TOKEN=glpat-xxxxxxxx</pre>
                             Un statut par ligne. Un ticket dont le code est dans la branche livrée et qui est dans un autre statut est signalé.
                             Vide : tout statut de la catégorie <em>Terminé</em> convient ; <em>En cours</em> est signalé en orange, <em>À faire</em> en rouge.
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="tagCount">Suivi par projet : tags de version lus</label>
+                        <input type="number" min="1" max="50" class="form-control" name="tagCount" id="tagCount" value="{{ settings.tagCount }}" style="max-width: 120px">
+                        <div class="form-text">Les N tags les plus récents du dépôt de chaque projet : un ticket est cherché dans ces tags et dans la branche livrée.</div>
                     </div>
                     <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer et tester la lecture</button>
                     {% if settings.configured and gitlab_configured %}<a href="{{ path('release_content') }}" class="btn btn-outline-secondary">Voir le contenu de la MEP</a>{% endif %}

@@ -22,6 +22,7 @@ class ReleaseContentSettingsController extends AbstractController
                 'reference' => (string) $request->request->get('reference'),
                 'ticketProjects' => ReleaseContentSettings::parseProjectKeys((string) $request->request->get('ticketProjects')),
                 'expectedStatuses' => ReleaseContentSettings::parseList((string) $request->request->get('expectedStatuses')),
+                'tagCount' => (int) $request->request->get('tagCount', 10),
             ]);
             $this->addFlash('success', 'Paramétrage enregistré. Vérifiez ci-dessous la lecture des dépôts.');
 
@@ -31,7 +32,7 @@ class ReleaseContentSettingsController extends AbstractController
         // Aperçu de la lecture de chaque dépôt, pour valider le paramétrage
         $scans = [];
         if ($gitlab->isConfigured()) {
-            foreach ($settings->getRepositories() as $repository) {
+            foreach ($service->getRepositories() as $repository) {
                 $scans[] = $service->scanRepository($repository);
             }
         }

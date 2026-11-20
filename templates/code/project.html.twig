@@ -1,0 +1,143 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Code · {{ project.name }}{% endblock %}
+
+{% macro level_icon(level) %}
+    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>
+    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
+    {%- else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif -%}
+{% endmacro %}
+
+{% block body %}
+    {% embed 'code/_nav.html.twig' with {icon: 'kanban', title: 'Tickets dans le code'} %}
+        {% block filters %}
+            <select name="where" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Emplacement">
+                <option value="">Partout</option>
+                <option value="tag" {{ where == 'tag' ? 'selected' }}>Dans un tag</option>
+                <option value="develop" {{ where == 'develop' ? 'selected' }}>Dans {{ settings.branch }} seulement</option>
+                <option value="none" {{ where == 'none' ? 'selected' }}>Sans code</option>
+            </select>
+            <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Type de ticket">
+                <option value="">Tous les types</option>
+                {% for t in report.types %}<option value="{{ t }}" {{ type == t ? 'selected' }}>{{ t }}</option>{% endfor %}
+            </select>
+            <div class="form-check form-switch text-nowrap">
+                <input class="form-check-input" type="checkbox" name="problems" value="1" id="problems" {{ only_problems ? 'checked' }} onchange="this.form.submit()">
+                <label class="form-check-label small" for="problems">Problèmes uniquement</label>
+            </div>
+        {% endblock %}
+    {% endembed %}
+
+    {% if report.error %}
+        <div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ report.error }}</div>
+    {% else %}
+        <p class="text-muted small">
+            Dépôt <a href="{{ report.repositoryUrl }}" target="_blank" rel="noopener">{{ report.repositoryName }}</a> :
+            pour chaque ticket, son code est-il dans <code>{{ report.branch }}</code> (pas encore taggé) ou dans un des {{ report.tags|length }} derniers tags,
+            et ce tag correspond-il à la version Jira du ticket ? Sont listés les tickets cités dans le code et ceux des versions Jira non livrées ou taggées.
+        </p>
+
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md"><div class="card stat-card h-100"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-ticket-detailed"></i> Tickets</div><div class="display-6">{{ report.tickets|length }}</div>
+            </div></div></div>
+            <div class="col-6 col-md"><div class="card stat-card h-100 {{ counts.error ? 'border-danger text-danger' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-x-octagon"></i> Version ou tag incohérent</div><div class="display-6">{{ counts.error }}</div>
+            </div></div></div>
+            <div class="col-6 col-md"><div class="card stat-card h-100 {{ counts.warning ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-exclamation-triangle"></i> À vérifier</div><div class="display-6">{{ counts.warning }}</div>
+            </div></div></div>
+            <div class="col-6 col-md"><div class="card stat-card h-100 {{ report.countUntracked ? 'border-warning' }}"><div class="card-body py-2">
+                <div class="small"><i class="bi bi-patch-question"></i> MR / commits sans ticket</div><div class="display-6">{{ report.countUntracked }}</div>
+            </div></div></div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-tags"></i> Branche livrée et tags de version</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle small">
+                    <thead class="table-light"><tr><th>Branche / tag</th><th>Date</th><th>Version Jira</th><th>Commits</th><th>Tickets</th><th>Sans ticket</th><th>Contrôle</th><th></th></tr></thead>
+                    <tbody>
+                    {% set rows = report.develop ? [{name: report.branch, date: null, url: null, previous: report.develop.reference, scan: report.develop, versions: [], problems: [], develop: true}] : [] %}
+                    {% for row in rows|merge(report.tags) %}
+                        {% set scan = row.scan %}
+                        {% set untracked = scan.mergeRequests|filter(m => m.keys is empty)|length + scan.directCommits|filter(c => c.keys is empty)|length %}
+                        <tr>
+                            <td>
+                                {% if row.develop ?? false %}<i class="bi bi-git"></i> <strong>{{ row.name }}</strong> <span class="text-muted">depuis {{ row.previous ?: 'le début' }}</span>
+                                {% else %}<i class="bi bi-tag"></i> <a href="{{ row.url }}" target="_blank" rel="noopener" class="fw-semibold">{{ row.name }}</a>{% endif %}
+                            </td>
+                            <td class="text-nowrap">{{ row.date ? row.date|date('d/m/Y') : '' }}</td>
+                            <td>
+                                {% for v in row.versions %}
+                                    <span class="badge {{ v.released ? 'text-bg-success' : 'text-bg-warning' }}" title="{{ v.released ? 'Livrée' : 'Non livrée' }}{{ v.releaseDate ? ' · ' ~ v.releaseDate|date('d/m/Y') }}">{{ v.name }}</span>
+                                {% else %}{{ (row.develop ?? false) ? '' : '—' }}{% endfor %}
+                            </td>
+                            <td>{{ scan.error ? '' : scan.commitCount }}</td>
+                            <td>{{ scan.keys|length }}</td>
+                            <td>{% if untracked %}<span class="badge text-bg-warning">{{ untracked }}</span>{% elseif not scan.error %}<span class="text-success">0</span>{% endif %}</td>
+                            <td>
+                                {% if scan.error %}<span class="text-danger">{{ scan.error }}</span>{% endif %}
+                                {% for problem in row.problems %}<div>{{ _self.level_icon(problem.level) }} {{ problem.message }}</div>{% endfor %}
+                            </td>
+                            <td class="text-end">
+                                {% if not (row.develop ?? false) %}<a href="{{ path('code_tag', {project: project.id, tag: row.name}) }}" class="btn btn-sm btn-outline-secondary text-nowrap">Contenu du tag</a>
+                                {% elseif scan.compareUrl %}<a href="{{ scan.compareUrl }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Comparer</a>{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-ticket-detailed"></i> Tickets ({{ tickets|length }})</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle delivery-table">
+                    <thead class="table-light"><tr><th>Ticket</th><th>Statut</th><th>Version Jira</th><th>Code</th><th>Contrôle</th></tr></thead>
+                    <tbody>
+                    {% for ticket in tickets %}
+                        {% set issue = ticket.issue %}
+                        <tr class="level-row-{{ ticket.level }}">
+                            <td style="min-width: 260px">
+                                {% if issue %}
+                                    <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
+                                    <span class="small text-muted">{{ issue.type }}</span>
+                                    <div class="small">{{ issue.summary }}</div>
+                                    {% if ticket.parent %}<div class="small text-muted">Sous-tâche de <a href="{{ ticket.parent.url }}" target="_blank" rel="noopener">{{ ticket.parent.key }}</a></div>{% endif %}
+                                {% else %}<span class="fw-semibold">{{ ticket.key }}</span>{% endif %}
+                            </td>
+                            <td>{% if issue %}<span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>{% endif %}</td>
+                            <td class="small">
+                                {% for v in ticket.versions %}<span class="badge {{ v.released ? 'text-bg-light border' : 'text-bg-info' }}">{{ v.name }}</span> {% else %}<span class="text-muted">—</span>{% endfor %}
+                            </td>
+                            <td class="small">
+                                {% for tag in ticket.tags %}<a href="{{ path('code_tag', {project: project.id, tag: tag}) }}" class="badge text-bg-success text-decoration-none"><i class="bi bi-tag"></i> {{ tag }}</a> {% endfor %}
+                                {% if ticket.inDevelop %}<span class="badge text-bg-primary"><i class="bi bi-git"></i> {{ report.branch }}</span>{% endif %}
+                                {% if not ticket.inCode %}<span class="text-muted">Aucun commit</span>{% endif %}
+                                {% if ticket.sources %}
+                                    <details class="mt-1"><summary class="text-muted">{{ ticket.sources|length }} MR / commit(s)</summary>
+                                        {% for source in ticket.sources %}
+                                            <div class="text-truncate" style="max-width: 360px" title="{{ source.repository }} · {{ source.author }}">
+                                                <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
+                                                <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.label }}</a>
+                                            </div>
+                                        {% endfor %}
+                                    </details>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% for problem in ticket.problems %}<div>{{ _self.level_icon(problem.level) }} {{ problem.message }}</div>
+                                {% else %}{{ _self.level_icon('ok') }} {{ ticket.tags ? 'Tag conforme à la version' : (ticket.inDevelop ? 'Partira avec sa version' : 'Pas encore de code') }}{% endfor %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted text-center py-3">Aucun ticket.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

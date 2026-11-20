@@ -77,7 +77,7 @@ final class ReleaseTicket
         $unreleased = array_filter($versions, fn (array $v) => !$v['released']);
         $whose = $inherited ? sprintf(' (version du ticket parent %s)', $this->parent->key) : '';
         if ([] !== $unreleased) {
-            $this->add(self::ERROR, sprintf('Prévu dans %s%s, pas dans %s : le code partira pourtant avec cette MEP.', self::quoteList(array_map(fn ($v) => $v['name'], $unreleased), ', '), $whose, $target));
+            $this->add(self::ERROR, sprintf('Prévu dans %s%s, pas dans %s : le code fait pourtant partie de cette livraison.', self::quoteList(array_map(fn ($v) => $v['name'], $unreleased), ', '), $whose, $target));
         } elseif ([] !== $versions) {
             $this->add(self::WARNING, sprintf('Version %s déjà livrée%s : ajouter %s si ce code est une suite ou un correctif.', self::quoteList($names, ', '), $whose, $target));
         } else {

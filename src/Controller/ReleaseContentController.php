@@ -20,9 +20,9 @@ class ReleaseContentController extends AbstractController
     #[Route('/livraisons/contenu', name: 'release_content', methods: ['GET'])]
     public function index(Request $request, ReleaseContentSettings $settings, ReleaseContentService $service, GitLabClient $gitlab, JiraClient $jira): Response
     {
-        if (!$gitlab->isConfigured() || !$settings->isConfigured()) {
+        if (!$gitlab->isConfigured() || [] === $service->getRepositories()) {
             $this->addFlash('info', $gitlab->isConfigured()
-                ? 'Indiquez d\'abord les dépôts GitLab à lire.'
+                ? 'Indiquez d\'abord les dépôts GitLab à lire (ici, ou le dépôt de chaque projet).'
                 : 'Renseignez GITLAB_BASE_URL et GITLAB_API_TOKEN dans le fichier .env.local, puis les dépôts GitLab à lire.');
 
             return $this->redirectToRoute('admin_release_content');

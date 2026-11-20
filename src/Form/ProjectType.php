@@ -48,6 +48,12 @@ class ProjectType extends AbstractType
                 'help' => 'Optionnel, ex. : issuetype != Epic',
                 'required' => false,
             ])
+            ->add('gitlabRepository', TextType::class, [
+                'label' => 'Dépôt GitLab',
+                'help' => 'Chemin groupe/projet ou URL du dépôt. Sert à savoir, pour chaque ticket, s\'il est dans develop ou dans un tag de version.',
+                'required' => false,
+                'attr' => ['placeholder' => 'mon-groupe/portail'],
+            ])
             ->add('active', CheckboxType::class, ['label' => 'Projet actif', 'required' => false]);
     }
 

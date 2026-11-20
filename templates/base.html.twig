@@ -24,7 +24,14 @@
                 <li class="nav-item"><a class="nav-link {{ route starts with 'sprint' ? 'active' }}" href="{{ path('sprint_index') }}"><i class="bi bi-calendar-range"></i> Sprints</a></li>
                 <li class="nav-item"><a class="nav-link {{ route starts with 'backlog' ? 'active' }}" href="{{ path('backlog_index') }}"><i class="bi bi-list-task"></i> Backlog</a></li>
                 <li class="nav-item"><a class="nav-link {{ route == 'delivery' ? 'active' }}" href="{{ path('delivery') }}"><i class="bi bi-truck"></i> Dépendances livraison</a></li>
-                <li class="nav-item"><a class="nav-link {{ route == 'release_content' ? 'active' }}" href="{{ path('release_content') }}"><i class="bi bi-git"></i> Contenu MEP</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {{ route == 'release_content' or route starts with 'code_' ? 'active' }}" href="#" data-bs-toggle="dropdown"><i class="bi bi-git"></i> Code</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ path('code_project') }}"><i class="bi bi-kanban"></i> Tickets du projet (develop / tags)</a></li>
+                        <li><a class="dropdown-item" href="{{ path('code_tag') }}"><i class="bi bi-tag"></i> Contenu d'un tag</a></li>
+                        <li><a class="dropdown-item" href="{{ path('release_content') }}"><i class="bi bi-box-seam"></i> Contenu MEP</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link {{ route == 'health' ? 'active' }}" href="{{ path('health') }}"><i class="bi bi-heart-pulse"></i> Suivi &amp; alertes</a></li>
                 <li class="nav-item"><a class="nav-link {{ route starts with 'project_' ? 'active' }}" href="{{ path('project_index') }}"><i class="bi bi-kanban"></i> Projets</a></li>
             </ul>

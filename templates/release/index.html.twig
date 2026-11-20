@@ -2,11 +2,6 @@
 
 {% block title %}Contenu de la MEP{% endblock %}
 
-{% macro level_icon(level) %}
-    {%- if level == 'error' %}<i class="bi bi-x-octagon-fill text-danger"></i>
-    {%- elseif level == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
-    {%- else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif -%}
-{% endmacro %}
 
 {% block body %}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -88,62 +83,7 @@
                 {% if all_url %}<a href="{{ all_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Tous dans Jira</a>{% endif %}
             </span>
         </div>
-        <div class="table-responsive">
-            <table class="table table-sm mb-0 align-middle delivery-table">
-                <thead class="table-light">
-                    <tr><th>Ticket</th><th>Statut</th><th>Version</th><th>Contrôle</th><th>Code</th></tr>
-                </thead>
-                <tbody>
-                {% for ticket in tickets %}
-                    {% set issue = ticket.issue %}
-                    <tr class="level-row-{{ ticket.level }}">
-                        <td style="min-width: 260px">
-                            {% if issue %}
-                                <a href="{{ issue.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">{{ issue.key }}</a>
-                                {% if issue.key != ticket.key %}<span class="small text-muted">(cité « {{ ticket.key }} »)</span>{% endif %}
-                                <span class="small text-muted">{{ issue.type }}</span>
-                                <div class="small">{{ issue.summary }}</div>
-                                {% if ticket.parent %}<div class="small text-muted">Sous-tâche de <a href="{{ ticket.parent.url }}" target="_blank" rel="noopener">{{ ticket.parent.key }}</a> {{ ticket.parent.summary }}</div>{% endif %}
-                            {% else %}
-                                <span class="fw-semibold">{{ ticket.key }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{% if issue %}<span class="badge {{ issue.statusBadgeClass }}">{{ issue.status }}</span>{% endif %}</td>
-                        <td class="small">
-                            {% if issue %}
-                                {% for v in issue.versionDetails %}
-                                    <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : (v.released ? 'text-bg-light border' : 'text-bg-warning') }}">{{ v.name }}</span>
-                                {% else %}
-                                    {% for v in ticket.parent.versionDetails ?? [] %}
-                                        <span class="badge {{ content.targetVersions[v.id] is defined ? 'text-bg-success' : 'text-bg-light border' }}" title="Version du ticket parent">{{ v.name }} <i class="bi bi-arrow-90deg-up"></i></span>
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endfor %}
-                                {% endfor %}
-                            {% endif %}
-                        </td>
-                        <td class="small">
-                            {% for problem in ticket.problems %}
-                                <div>{{ _self.level_icon(problem.level) }} {{ problem.message }}</div>
-                            {% else %}
-                                {{ _self.level_icon('ok') }} À jour
-                            {% endfor %}
-                        </td>
-                        <td class="small" style="min-width: 220px">
-                            {% for source in ticket.sources %}
-                                <div class="text-truncate" style="max-width: 360px" title="{{ source.repository }} · {{ source.author }}{{ source.date ? ' · ' ~ source.date|date('d/m/Y') }}">
-                                    <i class="bi bi-{{ source.type == 'mr' ? 'sign-merge-left' : 'git' }}"></i>
-                                    <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.label }}</a>
-                                    {% if content.repositories|length > 1 %}<span class="text-muted">· {{ source.repository }}</span>{% endif %}
-                                </div>
-                            {% endfor %}
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="5" class="text-muted text-center py-3">{{ only_problems ? 'Aucun problème : Jira est à jour.' : 'Aucun ticket cité dans le code à livrer.' }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        {{ include('release/_tickets_table.html.twig') }}
         </div>
     </div>
 

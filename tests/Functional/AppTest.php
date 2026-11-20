@@ -23,6 +23,8 @@ class AppTest extends WebTestCase
         $metadata = $this->em->getMetadataFactory()->getAllMetadata();
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
+        // Réponses mises en cache avec une durée explicite (versions, statuts…) par un test précédent
+        static::getContainer()->get('cache.app')->clear();
     }
 
     public function testWelcomePageWhenNothingConfigured(): void
@@ -171,6 +173,51 @@ class AppTest extends WebTestCase
 
         $this->client->request('GET', '/parametrage/connexion');
         self::assertSelectorTextContains('body', 'Alice Martin (amartin)');
+    }
+
+    public function testCodeTrackingByProjectAndTag(): void
+    {
+        $this->em->persist((new Project())->setName('Portail')->setJiraProjectKey('APP')->setGitlabRepository('https://gitlab.test/groupe/portail.git'));
+        $this->em->flush();
+
+        // Tickets du projet : develop (après v1.4.2), tag v1.4.2, tag v1.4.1 (premier tag)
+        $crawler = $this->client->request('GET', '/code/projet');
+        self::assertResponseIsSuccessful();
+        $row = fn (string $key) => $crawler->filter('table.delivery-table tbody tr')->reduce(fn ($tr) => str_contains($tr->filter('td')->first()->text(), $key))->text();
+
+        self::assertStringContainsString('v1.4.2', $row('APP-2'));
+        self::assertStringContainsString('Tag conforme à la version', $row('APP-2'));
+        self::assertStringContainsString('Livré dans le tag v1.4.2 mais la version Jira est « 1.5.0 »', $row('APP-3'));
+        self::assertStringContainsString('déjà taggée (v1.4.2)', $row('APP-1'), 'Code arrivé dans develop après le tag de sa version');
+        self::assertStringContainsString('aucun commit dans le tag v1.4.2', $row('APP-9'));
+        self::assertStringContainsString('Introuvable dans Jira', $row('APP-5'));
+
+        $tags = $crawler->filter('.card')->reduce(fn ($c) => str_contains($c->text(), 'Branche livrée et tags'))->text();
+        self::assertStringContainsString('v1.4.1', $tags);
+        self::assertStringContainsString('Aucune version Jira 1.4.1 ne correspond au tag', $tags);
+        self::assertStringContainsString('Version Jira « 1.4.2 » pas encore marquée livrée', $tags);
+
+        // Filtre : seulement les tickets dans un tag
+        $crawler = $this->client->request('GET', '/code/projet?where=tag');
+        self::assertCount(3, $crawler->filter('table.delivery-table tbody tr'), 'APP-2, APP-3, APP-5');
+
+        // Contenu du tag v1.4.2 : commits rattachés à leurs tickets, alerte pour le commit sans ticket
+        $crawler = $this->client->request('GET', '/code/tag?tag=v1.4.2');
+        self::assertResponseIsSuccessful();
+        $commits = $crawler->filter('.card')->reduce(fn ($c) => str_contains($c->filter('.card-header')->text(''), 'Commits du tag'));
+        self::assertStringContainsString('depuis le tag précédent v1.4.1', $crawler->filter('main')->text());
+        $typo = $commits->filter('tbody tr')->reduce(fn ($tr) => str_contains($tr->text(), 'Typo'));
+        self::assertStringContainsString('Aucun ticket', $typo->text());
+        $filter = $commits->filter('tbody tr')->reduce(fn ($tr) => str_contains($tr->text(), 'Filtre par date'));
+        self::assertStringContainsString('APP-2', $filter->text(), 'Commit rattaché au ticket de sa merge request');
+        self::assertStringContainsString('!20', $filter->text());
+        self::assertStringContainsString('Prévu dans « 1.5.0 », pas dans « 1.4.2 »', $crawler->filter('main')->text());
+        self::assertStringContainsString('APP-9', $crawler->filter('main')->text(), 'Dans la version 1.4.2 mais absent du tag');
+
+        // Contenu MEP : le dépôt du projet est lu sans paramétrage supplémentaire
+        $this->client->request('GET', '/livraisons/contenu');
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('body', 'Groupe / Portail — master..develop');
     }
 
     /**

@@ -101,64 +101,99 @@ class ReleaseContentService
                 }
             }
 
-            $commits = $this->gitlab->getCommitsBetween($project['id'], $scan->reference, $scan->branch);
-            $scan->commitCount = \count($commits);
-            if ([] === $commits) {
-                return $scan;
-            }
-
-            $bySha = [];
-            foreach ($commits as $commit) {
-                $bySha[$commit['sha']] = $commit;
-            }
-
-            // Merge requests dont le commit de fusion (ou squash, ou fast-forward) est dans l'écart
-            $dates = array_filter(array_column($commits, 'date'));
-            $oldest = [] !== $dates ? min($dates) : new \DateTimeImmutable('-1 year');
-            $mergeRequests = array_values(array_filter(
-                $this->gitlab->getMergedMergeRequests($project['id'], $scan->branch, $oldest->modify('-1 day')),
-                fn (array $mr) => [] !== array_intersect($mr['shas'], array_keys($bySha)),
-            ));
-            $mrCommits = [] !== $mergeRequests ? $this->gitlab->getMergeRequestCommits($project['id'], array_column($mergeRequests, 'iid')) : [];
-
-            $covered = [];
-            foreach ($mergeRequests as $mr) {
-                $texts = [$mr['title'], $mr['sourceBranch'], $mr['description']];
-                foreach ($mrCommits[$mr['iid']] ?? [] as $c) {
-                    $texts[] = $c['message'];
-                    $covered[$c['sha']] = true;
-                }
-                foreach ($mr['shas'] as $sha) {
-                    if (isset($bySha[$sha])) {
-                        $texts[] = $bySha[$sha]['message'];
-                        $covered[$sha] = true;
-                    }
-                }
-                $scan->mergeRequests[] = [
-                    'iid' => $mr['iid'],
-                    'title' => $mr['title'],
-                    'sourceBranch' => $mr['sourceBranch'],
-                    'author' => $mr['author'],
-                    'mergedAt' => $mr['mergedAt'],
-                    'url' => $mr['url'],
-                    'keys' => TicketKeyExtractor::extract(implode("\n", $texts), $projectKeys),
-                    'commits' => \count($mrCommits[$mr['iid']] ?? []),
-                ];
-            }
-
-            // Commits poussés sans merge request (les commits de fusion "Merge branch..." sont ignorés)
-            foreach ($commits as $commit) {
-                if (isset($covered[$commit['sha']]) || $commit['merge']) {
-                    continue;
-                }
-                $commit['keys'] = TicketKeyExtractor::extract($commit['message'], $projectKeys);
-                $scan->directCommits[] = $commit;
-            }
+            $this->fillScan($scan, $project['id'], $projectKeys);
         } catch (AtlassianException $e) {
             $scan->error = $e->getMessage();
         }
 
         return $scan;
+    }
+
+    /**
+     * Lit l'intervalle "from..to" d'un dépôt déjà résolu (ex. : tag précédent..tag, dernier tag..develop).
+     *
+     * @param array{id: int, name: string, path: string, webUrl: string} $gitProject
+     * @param array<int, array>|null                                       $mergeRequests merge requests déjà lues (sinon lues ici)
+     */
+    public function scanRange(array $gitProject, ?string $from, string $to, array $projectKeys, ?array $mergeRequests = null): RepositoryScan
+    {
+        $scan = new RepositoryScan($gitProject['path'], $from, $to);
+        $scan->name = $gitProject['name'];
+        $scan->webUrl = $gitProject['webUrl'];
+        try {
+            $this->fillScan($scan, $gitProject['id'], $projectKeys, $mergeRequests);
+        } catch (AtlassianException $e) {
+            $scan->error = $e->getMessage();
+        }
+
+        return $scan;
+    }
+
+    /**
+     * @param array<int, array>|null $mergeRequests merge requests fusionnées déjà lues (null : lues depuis le plus ancien commit)
+     *
+     * @throws AtlassianException
+     */
+    private function fillScan(RepositoryScan $scan, int $projectId, array $projectKeys, ?array $mergeRequests = null): void
+    {
+        $commits = $this->gitlab->getCommitsBetween($projectId, $scan->reference ?? '', $scan->branch);
+        $scan->commitCount = \count($commits);
+        if ([] === $commits) {
+            return;
+        }
+
+        $bySha = [];
+        foreach ($commits as $commit) {
+            $bySha[$commit['sha']] = $commit;
+        }
+
+        // Merge requests (vers n'importe quelle branche : develop, hotfix…) dont le commit de fusion,
+        // le commit "squash" ou le dernier commit (fast-forward) est dans l'intervalle
+        if (null === $mergeRequests) {
+            $dates = array_filter(array_column($commits, 'date'));
+            $oldest = [] !== $dates ? min($dates) : new \DateTimeImmutable('-1 year');
+            $mergeRequests = $this->gitlab->getMergedMergeRequests($projectId, null, $oldest->modify('-1 day'));
+        }
+        $mergeRequests = array_values(array_filter($mergeRequests, fn (array $mr) => [] !== array_intersect($mr['shas'], array_keys($bySha))));
+        $mrCommits = [] !== $mergeRequests ? $this->gitlab->getMergeRequestCommits($projectId, array_column($mergeRequests, 'iid')) : [];
+
+        $covered = [];
+        foreach ($mergeRequests as $mr) {
+            $texts = [$mr['title'], $mr['sourceBranch'], $mr['description']];
+            $commitList = [];
+            foreach ($mrCommits[$mr['iid']] ?? [] as $c) {
+                $texts[] = $c['message'];
+                $covered[$c['sha']] = true;
+                $commitList[] = $c + ['keys' => TicketKeyExtractor::extract($c['message'], $projectKeys)];
+            }
+            foreach ($mr['shas'] as $sha) {
+                if (isset($bySha[$sha])) {
+                    $texts[] = $bySha[$sha]['message'];
+                    $covered[$sha] = true;
+                }
+            }
+            $scan->mergeRequests[] = [
+                'iid' => $mr['iid'],
+                'title' => $mr['title'],
+                'sourceBranch' => $mr['sourceBranch'],
+                'targetBranch' => $mr['targetBranch'] ?? '',
+                'author' => $mr['author'],
+                'mergedAt' => $mr['mergedAt'],
+                'url' => $mr['url'],
+                'keys' => TicketKeyExtractor::extract(implode("\n", $texts), $projectKeys),
+                'commits' => \count($commitList),
+                'commitList' => $commitList,
+            ];
+        }
+
+        // Commits poussés sans merge request (les commits de fusion "Merge branch..." sont ignorés)
+        foreach ($commits as $commit) {
+            if (isset($covered[$commit['sha']]) || $commit['merge']) {
+                continue;
+            }
+            $commit['keys'] = TicketKeyExtractor::extract($commit['message'], $projectKeys);
+            $scan->directCommits[] = $commit;
+        }
     }
 
     /**
@@ -179,9 +214,39 @@ class ReleaseContentService
         }
 
         $content = new ReleaseContent($projectKeys, $candidates, $targetVersions);
-        foreach ($this->settings->getRepositories() as $repository) {
+        foreach ($this->getRepositories() as $repository) {
             $content->repositories[] = $this->scanRepository($repository, $projectKeys);
         }
+
+        return $this->fillTickets($content);
+    }
+
+    /**
+     * Dépôts lus pour la MEP : ceux du paramétrage, puis ceux des projets actifs (sans doublon).
+     *
+     * @return array<int, array{path: string, reference: ?string, branch: ?string}>
+     */
+    public function getRepositories(): array
+    {
+        $repositories = $this->settings->getRepositories();
+        $paths = array_map(fn (array $r) => mb_strtolower($r['path']), $repositories);
+        foreach ($this->projects->findBy(['active' => true], ['name' => 'ASC']) as $project) {
+            $path = $project->getGitlabRepository();
+            if (null !== $path && !\in_array(mb_strtolower($path), $paths, true)) {
+                $repositories[] = ['path' => $path, 'reference' => null, 'branch' => null];
+                $paths[] = mb_strtolower($path);
+            }
+        }
+
+        return $repositories;
+    }
+
+    /**
+     * Tickets cités par les dépôts lus, contrôle dans Jira, tickets des versions sans code, code sans ticket.
+     */
+    public function fillTickets(ReleaseContent $content): ReleaseContent
+    {
+        $targetVersions = $content->targetVersions;
 
         // Tickets cités et leurs provenances
         $tickets = [];
