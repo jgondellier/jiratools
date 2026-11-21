@@ -11,8 +11,3 @@ updates:
       autres:
         patterns: ["*"]
         exclude-patterns: ["symfony/*"]
-  - package-ecosystem: github-actions
-    directory: /
-    schedule: { interval: monthly }
-    groups:
-      actions: { patterns: ["*"] }
